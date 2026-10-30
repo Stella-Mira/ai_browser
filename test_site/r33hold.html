@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>r33 挂起档：有连接永不关闭的页面</title></head>
+<body>
+<!-- 用途（第三十一轮·T122）：页面**立刻渲染** 5 条记录；`?mode=hold` 时再挂一个**永不返回**的
+     `fetch('/hold')`（长轮询/SSE 的常见形态）。
+     要害：`parse_url` 默认 `wait_until="networkidle"`，而"静置"在这种页面上**永不成立** ⇒
+     修前会白等满 caller 的整个 timeout（实测 11.2s/10s 预算），而内容**早就渲染好了**。
+     修后：有界等静置（2.5s）⇒ 快速交付 + `stats.network_settled=false`（**响**，不是悄悄少内容）。 -->
+<ul id="list"></ul>
+<script>
+const q = new URLSearchParams(location.search);
+let h = '';
+for (let i = 0; i < 5; i++) {
+  h += '<li class="card"><a class="title" href="?i=' + i + '">第 ' + i + ' 条记录</a>'
+     + '<p class="meta">标签 ' + i + '</p></li>';
+}
+document.getElementById('list').innerHTML = h;
+if (q.get('mode') === 'hold') { fetch('/hold').catch(() => {}); }
+</script>
+</body></html>

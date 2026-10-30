@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>追加式列表（总数逐页增长）+ 恒定的子组计数</title>
+<style>body{font-family:system-ui,sans-serif;margin:0;padding:16px}
+.grp{list-style:none;color:#888}.progress{color:#666}</style>
+</head>
+<body>
+<!-- 第十八轮评审 B 的那个反例形状（我自己复刻一份，名字避开它的 r18*）：
+     真实列表是**追加式**的：页面自己报的总数逐页增长 13 → 15 → 18 → 20；
+     容器内另有一个**恒定**的子组计数「本组 <本页区间> of 15」。
+     两个候选都自洽、窗口都 = 本页条数、窗口逐页 +5 推进。
+     用途：验证「跨页稳定」这条规则**不能**在这里把 total 交给那个恒定的假计数器
+     （正确行为：撤销声明 → stalled，而不是改用另一条声明），并且不许发出错误的终态。
+     `?dis=N`：第 N 页起分页器被禁用（把判决逼到那一页上）。 -->
+<main id="main">
+  <ul id="results"></ul>
+  <nav class="pager"><a id="next" href="?p=2">下一页</a>
+    <p class="progress">进度 1-5 of 13</p></nav>
+</main>
+<script>
+const q = new URLSearchParams(location.search);
+const p = Math.max(1, parseInt(q.get('p') || '1', 10));
+const PER = 5;
+// 追加式：每页的总数都在涨（模拟直播/评论流在翻页期间新增了条目）
+const GROW = [13, 15, 18, 20];
+const PAGES = GROW.length;
+const DIS = parseInt(q.get('dis') || '0', 10);
+const TOTAL = GROW[Math.min(p, PAGES) - 1];
+const FAKE_TOT = 15;                       // 恒定：子组计数永远说 15
+const results = document.getElementById('results');
+const next = document.getElementById('next');
+const lo = (p - 1) * PER + 1, hi = p * PER;
+const decoy = '<li class="grp"><span>本组 ' + lo + '-' + Math.min(hi, FAKE_TOT)
+            + ' of ' + FAKE_TOT + '</span></li>';
+const rows = (from) => {
+  let h = '';
+  for (let i = from; i < from + PER; i++) {
+    h += '<li class="card"><a class="title" href="?item=' + i + '">第 ' + i + ' 条记录</a>'
+       + '<span class="meta">标签' + i + '</span></li>';
+  }
+  return h;
+};
+results.innerHTML = decoy + rows((p - 1) * PER);
+document.querySelector('.progress').textContent = '进度 ' + lo + '-' + hi + ' of ' + TOTAL;
+if (p < PAGES) next.href = '?p=' + (p + 1) + (DIS ? '&dis=' + DIS : '');
+else next.setAttribute('aria-disabled', 'true');
+if (DIS && p >= DIS) next.setAttribute('aria-disabled', 'true');
+</script>
+</body>
+</html>

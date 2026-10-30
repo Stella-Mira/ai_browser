@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>会话级 cookie 持久化夹具</title></head>
+<body>
+<main>
+<h1>会员中心</h1>
+<p id="status">未登录</p>
+<button id="login-session">模拟登录（会话级 cookie，无 expires）</button>
+<button id="login-persist">模拟登录（带 max-age 的 cookie）</button>
+<p id="note">用途：T105 把「profile 跨会话存活」的正例与反例分开。</p>
+</main>
+<script>
+  // 关键差异：两条登录路径**只差一个 max-age**。
+  // 浏览器对「没有 expires/max-age 的 cookie」按会话级处理，正常浏览器行为是**关窗即丢**；
+  // T1 的夹具（index.html）用的是 max-age=86400，所以 T1 一直是绿的——
+  // 那条绿只证明了「带失效期的 cookie 能存活」，不覆盖真实登录里常见的会话级 cookie。
+  function refresh() {
+    const m = document.cookie.match(/ai_user=([^;]+)/);
+    document.getElementById('status').innerText = m ? '已登录：' + m[1] : '未登录';
+  }
+  document.getElementById('login-session').addEventListener('click', () => {
+    document.cookie = 'ai_user=sess;path=/';               // 无 max-age → 会话级
+    refresh();
+  });
+  document.getElementById('login-persist').addEventListener('click', () => {
+    document.cookie = 'ai_user=persist;path=/;max-age=86400';
+    refresh();
+  });
+  window.addEventListener('DOMContentLoaded', refresh);
+</script>
+</body>
+</html>

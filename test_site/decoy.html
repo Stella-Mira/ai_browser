@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>跨文档「同选择器诱饵」</title>
+<style>body{font-family:system-ui,sans-serif;margin:0;padding:16px}.meta{color:#888;margin-left:8px}</style>
+</head>
+<body>
+<main id="main">
+  <div id="host"></div>
+  <nav class="pager"><a id="next" href="?p=2">下一页</a></nav>
+</main>
+<script>
+// 专测「容器提示跨文档后靠选择器定位」的唯一性：
+//   第 1 页：真容器 = div#host > ul.res（有 5 条记录）
+//   第 2 页（**新文档**，data-ai-id 全部失效）：DOM 里**更前面**放一个**同选择器**的诱饵
+//     div.decoy > ul.res（空）+ 紧跟一句「没有更多了」；真容器 div#host > ul.res 在后面、空、
+//     附近**没有**任何宣告，分页器禁用。
+// 若提示按「末段选择器 ul.res」定位 → querySelector 命中的是**诱饵** → 把诱饵旁边那句
+// 当成「页面宣告了结束」→ 假 exhausted（数据只有 5 条，而站点能到 15 条）。
+// 正确行为：按**结构路径**（main>div#host>ul.res）定位到真容器 → 无宣告 → stalled（可重试）。
+const q = new URLSearchParams(location.search);
+const p = Math.max(1, parseInt(q.get('p') || '1', 10));
+const host = document.getElementById('host');
+const next = document.getElementById('next');
+const rows = (from, n) => {
+  let h = '';
+  for (let i = from; i < Math.min(from + n, 15); i++) {
+    h += '<li class="card"><a class="title" href="?item=' + i + '">第 ' + i + ' 条记录</a>'
+       + '<span class="meta">标签' + i + '</span></li>';
+  }
+  return h;
+};
+if (p <= 1) {
+  host.innerHTML = '<ul class="res">' + rows(0, 5) + '</ul>';
+  next.href = '?p=2&delay=' + (q.get('delay') || '3000');
+} else {
+  // 诱饵在前（同选择器 ul.res + 紧邻「没有更多了」），真容器在后、**慢加载**（默认 3s 后注入数据）。
+  // 真容器附近**没有**任何宣告，分页器在加载期间被禁用（真实站点的常见形态）。
+  host.innerHTML = '<div class="decoy"><ul class="res"></ul><p>没有更多了</p></div>'
+                 + '<ul class="res" id="real"></ul>';
+  next.setAttribute('aria-disabled', 'true');
+  const DELAY = parseInt(q.get('delay') || '3000', 10);
+  setTimeout(() => {
+    const real = document.getElementById('real');
+    real.innerHTML = rows((p - 1) * 5, 5);             // 每一页（>1）都慢加载，且**内容各不相同**
+    if (p < 3) {                                       // 还有第 3 页
+      next.removeAttribute('aria-disabled');
+      next.href = '?p=' + (p + 1) + '&delay=' + DELAY;
+    }
+  }, DELAY);
+}
+</script>
+</body>
+</html>

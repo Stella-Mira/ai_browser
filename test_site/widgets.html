@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>控件顺序与提取边界测试</title></head>
+<body>
+<main>
+<h1>控件顺序</h1>
+
+<!-- v0.3 的 bug：文本块里「按钮在链接之前」，提取与动作两套编号错位 -->
+<p>请先<button id="b1">重试</button>，或者<a id="k1" href="?go=back">返回上一页</a>。</p>
+
+<!-- 列表里的同一形态 -->
+<ul>
+  <li><button id="b2">展开</button></li>
+  <li><a id="k2" href="?go=more">查看更多</a></li>
+</ul>
+
+<!-- 裸文本：没有语义标签包裹，v0.3 会整段丢失 -->
+<div class="soup">这段文字没有任何语义标签包裹，v0.3 会整段丢失。</div>
+<div class="soup2"><span>嵌套在 span 里的裸文本，同样不该丢。</span></div>
+
+<!-- 懒加载图片：src 是占位符，真图在 data-src -->
+<img id="lazy" width="200" height="120" alt="懒加载图"
+     src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
+     data-src="lazy-real.png">
+
+<!-- 表头与标题 -->
+<table>
+  <caption>观测参数</caption>
+  <tr><th>参数</th><th>数值</th></tr>
+  <tr><td>轨道周期</td><td>33.6 天</td></tr>
+</table>
+
+<!-- 预填输入框：验证输入动作会先清空 -->
+<form action="?q" method="GET">
+  <input type="search" name="q" value="预填内容" aria-label="关键词">
+  <select name="cat" aria-label="分类">
+    <option>全部</option><option>行星</option><option>恒星</option>
+  </select>
+  <button type="submit">搜索</button>
+</form>
+
+<div id="out"></div>
+
+<!-- 必填项为空：浏览器会拦下提交 → submit 事件不触发、页面不跳转。
+     这正是「点了提交按钮但没生效」的场景，回执必须给出 submitted=false。 -->
+<form action="?v" method="GET">
+  <input name="must" required aria-label="必填项">
+  <button type="submit">提交(必填校验)</button>
+</form>
+
+<!-- 「普通 div + JS 点击」的控件：没有 <a>、没有 role，提取不到可点元素，
+     必须能用 {"action":"click_text","text":"..."} 点到 -->
+<div id="ghost" class="ghost-btn">纯 div 按钮</div>
+
+<!-- 只改 DOM 不换页（AJAX 类动作）：用来验证回执里必须有 dom_delta / appeared -->
+<button id="addnode">加一个节点</button>
+
+<!-- 只展开文本、不增删元素的控件：节点数不变、URL 不变、id 集合也不变，
+     这类动作只有 text_delta 能体现（否则又是一个静默口子） -->
+<button id="expand">展开纯文本</button>
+<div id="expandable">短</div>
+
+<!-- 被浮层盖住的按钮：点击前预检必须立刻报 blocked_by，而不是等 Playwright 30s 超时 -->
+<div style="position:relative;width:220px;height:44px">
+  <button id="covered" style="position:absolute;left:0;top:0;width:220px;height:44px">被盖住的按钮</button>
+  <div id="mask" style="position:absolute;left:0;top:0;width:220px;height:44px;background:rgba(0,0,0,.2);z-index:9">遮罩层</div>
+</div>
+
+<!-- 富文本输入框：聊天类 SPA 的通用形态，应被识别为 kind=type 且可输入 -->
+<div id="ce" contenteditable="true" aria-label="富文本输入"></div>
+<p id="ce-out">未输入</p>
+</main>
+<script>
+  const out = document.getElementById('out');
+  document.getElementById('b1').addEventListener('click', () => { out.innerText = '点了重试'; });
+  document.getElementById('b2').addEventListener('click', () => { out.innerText = '点了展开'; });
+  document.getElementById('k1').addEventListener('click', (e) => { e.preventDefault(); out.innerText = '点了返回'; });
+  document.getElementById('k2').addEventListener('click', (e) => { e.preventDefault(); out.innerText = '点了查看更多'; });
+  document.getElementById('ghost').addEventListener('click', () => { out.innerText = '点到了纯 div 按钮'; });
+  document.getElementById('expand').addEventListener('click', () => {
+    document.getElementById('expandable').textContent =
+      '这是一段被展开出来的更长文本，用来验证 text_delta：节点数完全不变、URL 不变、id 集合也不变，' +
+      '唯一的变化就是可见文本变长了——没有 text_delta 的话，这次点击在回执里等于什么都没发生。';
+  });
+  document.getElementById('addnode').addEventListener('click', () => {
+    const b = document.createElement('button');      // 用带 id 能力的元素，才能被 id 集合差看到
+    b.textContent = '动态按钮';
+    document.querySelector('main').appendChild(b);
+  });
+  document.getElementById('ce').addEventListener('input', (e) => {
+    document.getElementById('ce-out').innerText = '已输入：' + e.target.innerText;
+  });
+</script>
+</body>
+</html>

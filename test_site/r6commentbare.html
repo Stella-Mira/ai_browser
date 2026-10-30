@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>裸兄弟的「没有更多」：结构上合法页脚 / 语义上属于另一张列表</title>
+<style>body{font-family:system-ui,sans-serif;margin:0;padding:16px}</style>
+</head>
+<body>
+<!-- 判级 agent 第六轮裁定的「待实测」形态：兄弟**没有标题、元素很少、文案很短**（过得了结构闸），
+     但它其实属于评论组件；而结果列表还在慢加载（分页器暂时禁用）。
+     这里要测的就是：这种四条件同时成立时，会不会把「加载中」说成「抓完了」（S = 静默丢数据）。 -->
+<main id="main">
+  <ul id="results"></ul>
+  <!-- 评论组件的页脚：没有包裹元素、没有标题、文案很短 —— 与「结果列表的页脚」在结构上不可区分 -->
+  <p id="cmsg">没有更多了</p>
+  <nav class="pager"><a id="next" href="?p=2">下一页</a></nav>
+</main>
+<script>
+const q = new URLSearchParams(location.search);
+const p = Math.max(1, parseInt(q.get('p') || '1', 10));
+const PER = 5, TOTAL = 15;
+const DELAY = parseInt(q.get('delay') || '3000', 10);
+const results = document.getElementById('results');
+const next = document.getElementById('next');
+const rows = (from) => {
+  let h = '';
+  for (let i = from; i < Math.min(from + PER, TOTAL); i++) {
+    h += '<li class="card"><a class="title" href="?item=' + i + '">第 ' + i + ' 条结果</a>'
+       + '<span class="meta">标签' + i + '</span></li>';
+  }
+  return h;
+};
+if (p <= 1) {
+  results.innerHTML = rows(0);
+  next.href = '?p=2&delay=' + DELAY;
+} else if (q.get('partial')) {
+  // 变体：这一页**已经渲染出自己的记录**，但分页器在为「加载下一批」临时禁用，
+  // 3 秒后恢复（若还有下一页）。裸兄弟的「没有更多了」一直在。
+  // 记录组非空 + 分页器禁用 + 兄弟里的宣告 → 旧实现会直接 exhausted（→ 后面的页永远读不到）。
+  results.innerHTML = rows((p - 1) * PER);
+  next.setAttribute('aria-disabled', 'true');
+  setTimeout(() => {
+    if (p < 3) { next.removeAttribute('aria-disabled'); next.href = '?p=' + (p + 1) + '&delay=' + DELAY + '&partial=1'; }
+  }, DELAY);
+} else {
+  // 空壳 + 分页器临时禁用（「加载中别点」），DELAY 毫秒后真数据到、分页器恢复
+  results.innerHTML = '';
+  next.setAttribute('aria-disabled', 'true');
+  setTimeout(() => {
+    results.innerHTML = rows((p - 1) * PER);
+    if (p < 3) { next.removeAttribute('aria-disabled'); next.href = '?p=' + (p + 1) + '&delay=' + DELAY; }
+  }, DELAY);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>r30 打字对账档：页面经手后的值 vs 调用方要求的值</title>
+<style>body{font-family:system-ui,sans-serif;margin:0;padding:16px}code{background:#eee;padding:0 4px}</style></head>
+<body>
+<!-- 用途（第三十一轮·反例档）：`fill` 的 `type_keys` 慢路径写完会读回 `el.value`（`core.py:2605`），
+     但此前**没有任何东西拿它跟调用方要写的值对照**。本夹具把"页面会改写你写进去的东西"做成可复现：
+       ?th=15       keyup 里按**按键间隔**做处理（<th 毫秒 ⇒ 丢掉刚敲进的字符；否则转大写）——真实站点的常见形态
+                    （自动格式化/校验跟不上时丢字符）。这是**计时敏感**档，丢多少与机器速度有关。
+       ?th=0        关掉计时规则（用于隔离其它模式）
+       ?upper=0     不做转大写（隔离"合法改写"，让计时档的差异只剩丢字）
+       ?eat=1       在**第一次 input 事件**时恒定吃掉第一个字符——与计时/机器速度**无关**的确定性差异
+                    （不改用 change：`type_keys` 走真实键盘事件，只发 input，不发 change） -->
+<p><input id="q" placeholder="输入"><button id="go">提交</button></p>
+<p id="recv">收到的值：（未提交）</p>
+<p id="drop">丢字次数：0</p>
+<script>
+const q = document.getElementById('q');
+const recv = document.getElementById('recv');
+const drop = document.getElementById('drop');
+const P = new URLSearchParams(location.search);
+const TH = parseInt(P.get('th') === null ? '15' : P.get('th'), 10);
+const UPPER = P.get('upper') !== '0';
+const EAT = P.get('eat') === '1';
+let last = 0, dropped = 0, eaten = false;
+q.addEventListener('input', () => {
+  if (EAT && !eaten && q.value.length) { eaten = true; q.value = q.value.slice(1); }
+});
+q.addEventListener('keyup', () => {
+  const now = performance.now();
+  const gap = last ? (now - last) : 1e9;      // 第一个键不算间隔
+  last = now;
+  if (TH > 0 && gap < TH) { dropped++; q.value = q.value.slice(0, -1); }   // 太快：丢掉刚敲进的字符
+  else if (UPPER) { q.value = q.value.toUpperCase(); }                     // 正常：自动格式化
+  drop.textContent = '丢字次数：' + dropped;
+});
+document.getElementById('go').addEventListener('click', () => {
+  recv.textContent = '收到的值：' + q.value + ' ／ 丢字 ' + dropped;
+});
+</script>
+</body></html>

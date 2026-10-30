@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>r31 家族选择失效面：少数卡片带子列表</title>
+<style>body{font-family:system-ui,sans-serif;margin:0;padding:16px}
+ul{list-style:none;padding:0;margin:0}.sub{margin-left:16px;color:#666}</style></head>
+<body>
+<!-- 用途（第三十一轮·对抗评审 D1-3 的最小形状）：N 张**同结构卡片**，其中**前 mixed 张**多带一个
+     「3 项子列表」（真实形态：部分条目有"相关推荐"）。要害是**少数派会静默消失**——
+     「哪一族成为主族」由数值优势决定 ⇒ 同一种页面形态，交付内容随 N/mixed 而变。
+     参数：?n=<总数>&mixed=<带子列表的条数>&at=<少数派的起始下标，默认 0>
+       —— `at` 用来隔离**位置效应**：`leadSiblings`（开头那些"非主族"块）只影响**文档序开头**，
+          所以同一条记录放在开头/中间/末尾，走的是完全不同的两条路。 -->
+<main id="list"><ul id="results"></ul></main>
+<script>
+const q = new URLSearchParams(location.search);
+const N = parseInt(q.get('n') || '4', 10);
+const MIXED = parseInt(q.get('mixed') || '0', 10);
+const AT = parseInt(q.get('at') || '0', 10);
+let h = '';
+for (let i = 0; i < N; i++) {
+  const isMixed = i >= AT && i < AT + MIXED;
+  h += '<li class="card"><a class="title" href="?item=' + i + '">第 ' + i + ' 条记录</a>'
+     + '<p class="meta">标签 ' + i + '</p>';
+  if (isMixed) {
+    h += '<div class="relbox"><ul class="sub">';
+    for (let k = 0; k < 3; k++) h += '<li>子 ' + k + '</li>';
+    h += '</ul></div>';
+  }
+  h += '</li>';
+}
+document.getElementById('results').innerHTML = h;
+</script>
+</body></html>

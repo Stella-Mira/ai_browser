@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>合并闸：连续两个 head（评审第27轮）</title>
+<style>body{font-family:system-ui,sans-serif;margin:0;padding:16px}
+ul{list-style:none;padding:0;margin:0}.row,.cont,.spon{margin:4px 0}.cont,.spon{color:#777}</style></head>
+<body>
+<!-- 形状（评审第27轮的 r29gate 复刻）：记录 li.row > a.title[href]，续行 li.cont > span（无链接），
+     但 **i===1 那条故意不配续行**；spon=1 时在第 sponpos 条记录后插 li.spon > span
+     （同标签、同签名、无链接的外来块）。
+     用途：① 先钉住八档**现状**（绊线）② 再换判据（K=max_gap+1 个连续元素里不许有两个 head），
+     变红的档就是代价面。 -->
+<main id="main"><ul id="list"></ul>
+<nav class="pager"><a id="next" href="?" aria-disabled="true">下一页</a></nav></main>
+<script>
+const q = new URLSearchParams(location.search);
+const N = parseInt(q.get('n') || '4', 10);
+const SPON = q.get('spon') === '1';
+const POS = parseInt(q.get('sponpos') || '2', 10);
+let html = '';
+for (let i = 0; i < N; i++) {
+  html += '<li class="row"><a class="title" href="?item=' + i + '">第' + i + '条记录</a></li>';
+  if (i !== 1) html += '<li class="cont"><span>标签' + i + '</span></li>';
+  if (SPON && i === POS - 1) html += '<li class="spon"><span>赞助商推荐位</span></li>';
+}
+document.getElementById('list').innerHTML = html;
+</script>
+</body></html>

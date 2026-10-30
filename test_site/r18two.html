@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>跨页稳定性：稳定的假 vs 在变的真</title>
+<style>body{font-family:system-ui,sans-serif;margin:0;padding:16px}.meta{color:#888;margin-left:8px}</style>
+</head>
+<body>
+<main id="main"><ul id="results"></ul>
+  <nav class="pager"><a id="next" href="?p=2">下一页</a></nav></main>
+<script>
+// 3 页 × 5 条（真实 15 条）。两档的唯一差别是 `site`：
+//   site=grow : 站点声明的总数逐页 12 → 14 → 15（**在变**）
+//   其它       : 站点声明的总数恒定 15（**稳定**）
+// 假侧栏计数器「本组 lo-hi of SIDE」：tot 恒定（**稳定**），窗口 = 本页条数、逐页 +5 推进。
+// 两个候选的**区间都自洽**（lo<=hi<=tot），且都满足待打规则的全部前提。
+const q = new URLSearchParams(location.search);
+const p = Math.max(1, parseInt(q.get('p') || '1', 10));
+const PAGES = 3, PER = 5, TOT = PAGES * PER;
+const lo = (p - 1) * PER + 1, hi = Math.min(p * PER, TOT);
+const SITE = q.get('site') === 'grow' ? [12, 14, 15][p - 1] : TOT;
+const SIDE = parseInt(q.get('sidetot') || '12', 10);
+const list = document.getElementById('results');
+list.innerHTML = '<li class="grp"><span>本组 ' + lo + '-' + hi + ' of ' + SIDE + '</span></li>';
+for (let i = lo; i <= hi; i++) {
+  list.insertAdjacentHTML('beforeend',
+    '<li class="card"><a href="?item=' + (i - 1) + '">第 ' + (i - 1) + ' 条记录</a>'
+    + '<span class="meta">标签' + (i - 1) + '</span></li>');
+}
+const nav = document.querySelector('nav.pager');
+const prog = document.createElement('p');
+prog.className = 'progress';
+prog.textContent = '进度 ' + lo + '-' + hi + ' of ' + SITE;
+nav.appendChild(prog);
+const next = document.getElementById('next');
+next.href = '?p=' + Math.min(p + 1, PAGES) + '&sidetot=' + SIDE
+          + (q.get('site') === 'grow' ? '&site=grow' : '');
+if (p >= PAGES) next.setAttribute('aria-disabled', 'true');
+</script>
+</body></html>

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>两道闸同时拒同一个声明</title>
+<style>body{font-family:system-ui,sans-serif;margin:0;padding:16px}
+.grp{list-style:none;color:#888}</style>
+</head>
+<body>
+<!-- 第十三轮评审 A（实测 bug）：`ignored_declarations` 会把**同一个信号**记两条，
+     而两条的 `why` 互相矛盾（「不在容器里 / 一页装得下」与「在容器里但值不对」）——
+     因为页内闸与累计闸是两道独立的闸，各自 append 而没去重。
+     这里：4 页 × 5 条，**只在最后一页**的容器里放「本组 1-5 of 5」+ aria-setsize=5，
+     最后一页分页器禁用（于是停在这里）→ 两道闸同时拒它（5 ≤ 本页 5 条 + 已收 20 > 声明 5）。
+     正确行为：同一信号只报一条，保留覆盖力最强的 `inconsistent_with_collected`。 -->
+<main id="main">
+  <ul id="results"></ul>
+  <nav class="pager"><a id="next" href="?p=2">下一页</a></nav>
+</main>
+<script>
+const q = new URLSearchParams(location.search);
+const p = Math.max(1, parseInt(q.get('p') || '1', 10));
+const PAGES = parseInt(q.get('pages') || '4', 10);
+const PER = 5;
+const results = document.getElementById('results');
+const next = document.getElementById('next');
+const widget = '<li class="grp"><span aria-setsize="' + PER + '" aria-posinset="' + PER + '">本组 1-' + PER + ' of ' + PER + '</span></li>';
+const rows = (from) => {
+  let h = '';
+  for (let i = from; i < from + PER; i++) {
+    h += '<li class="card"><a class="title" href="?item=' + i + '">第 ' + i + ' 条记录</a>'
+       + '<span class="meta">标签' + i + '</span></li>';
+  }
+  return h;
+};
+// 声明只在最后一页出现（这样「一趟直达到末页」与「两趟续跑到末页」都会碰到它）
+results.innerHTML = (p >= PAGES ? widget : '') + rows((p - 1) * PER);
+if (p < PAGES) next.href = '?p=' + (p + 1) + '&pages=' + PAGES;
+else next.setAttribute('aria-disabled', 'true');     // 末页禁用 → 停在这里，两道闸都跑到
+</script>
+</body>
+</html>

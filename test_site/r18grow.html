@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>总数在涨的站点（追加式）+ 一个恒定的子组计数</title>
+<style>body{font-family:system-ui,sans-serif;margin:0;padding:16px}.meta{color:#888;margin-left:8px}</style>
+</head>
+<body>
+<main id="main"><ul id="results"></ul>
+  <nav class="pager"><a id="next" href="?p=2">下一页</a></nav></main>
+<script>
+// 追加式（直播流/评论流）风格：站点声明的**总数随页增长**：12 → 14 → 15。
+// 容器内另有一个**恒定**的子组计数：「本组 lo-hi of 12」（它形容的是「本批 12 条」，跨页不变）。
+// 两个候选都自洽（lo<=hi<=tot），窗口都等于本页条数、逐页 +5 推进。
+// 待打规则「声明总数必须跨页稳定」会：
+//   - 把**恒定的子组计数**（假的）判为可信；
+//   - 把**在变的真进度**判为「不是这份列表的账」→ 降级 → 剩下的 fake 成了唯一声明。
+const q = new URLSearchParams(location.search);
+const p = Math.max(1, parseInt(q.get('p') || '1', 10));
+const PAGES = 3, PER = 5, TOT = PAGES * PER;
+const lo = (p - 1) * PER + 1, hi = Math.min(p * PER, TOT);
+const SITE = [12, 14, 15][p - 1];                 // 真总数随页增长
+const BATCH = parseInt(q.get('batch') || '20', 10);   // 子组恒定（20 让它三页都自洽）
+const list = document.getElementById('results');
+list.innerHTML = '<li class="grp"><span>本组 ' + lo + '-' + hi + ' of ' + BATCH + '</span></li>';
+for (let i = lo; i <= hi; i++) {
+  list.insertAdjacentHTML('beforeend',
+    '<li class="card"><a href="?item=' + (i - 1) + '">第 ' + (i - 1) + ' 条记录</a>'
+    + '<span class="meta">标签' + (i - 1) + '</span></li>');
+}
+const nav = document.querySelector('nav.pager');
+const prog = document.createElement('p');
+prog.className = 'progress';
+prog.textContent = '进度 ' + lo + '-' + hi + ' of ' + SITE;
+nav.appendChild(prog);
+const next = document.getElementById('next');
+next.href = '?p=' + Math.min(p + 1, PAGES);
+if (p >= PAGES) next.setAttribute('aria-disabled', 'true');
+</script>
+</body></html>

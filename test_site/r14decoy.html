@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>容器内的诱饵计数器遮蔽容器外的真进度</title>
+<style>body{font-family:system-ui,sans-serif;margin:0;padding:16px}
+.grp{list-style:none;color:#888}.progress{color:#666;font-size:13px}</style>
+</head>
+<body>
+<!-- 第十四轮评审 A（实测 bug）：区间匹配过去只取**文档序第一个**，于是容器内的小控件
+     （写在记录之前）把容器外那个**真进度计数器**挤掉；而回包里被拒的那条理由还断言
+     「这个计数器不是这份列表的账」——可它明明在容器里。真计数器从头到尾没进过任何字段。
+     修法：收集**全部候选**并逐个标明位置/窗口/总数/是否被选中（`end_evidence.range_candidates`），
+     降级理由改成陈述事实（总数 < 已收），`source` 用真实来源。
+     这里：3 页 × 5 条 = 15 条；容器内写「本组 1-5 of 5」（窗口 5 == 本页 5，值上说得通），
+     `nav.pager` 里追加真进度「1-15 of 15」。 -->
+<main id="main">
+  <ul id="results"></ul>
+  <nav class="pager"><a id="next" href="?p=2">下一页</a>
+    <p class="progress">1-15 of 15</p></nav>
+</main>
+<script>
+const q = new URLSearchParams(location.search);
+const p = Math.max(1, parseInt(q.get('p') || '1', 10));
+const PAGES = parseInt(q.get('pages') || '3', 10);
+const PER = 5, TOTAL = PAGES * PER;
+const results = document.getElementById('results');
+const next = document.getElementById('next');
+const widget = '<li class="grp"><span>本组 1-' + PER + ' of ' + PER + '</span></li>';
+const rows = (from) => {
+  let h = '';
+  for (let i = from; i < from + PER; i++) {
+    h += '<li class="card"><a class="title" href="?item=' + i + '">第 ' + i + ' 条记录</a>'
+       + '<span class="meta">标签' + i + '</span></li>';
+  }
+  return h;
+};
+results.innerHTML = widget + rows((p - 1) * PER);
+document.querySelector('.progress').textContent =
+  ((p - 1) * PER + 1) + '-' + (p * PER) + ' of ' + TOTAL;
+if (p < PAGES) next.href = '?p=' + (p + 1) + '&pages=' + PAGES;
+else next.setAttribute('aria-disabled', 'true');
+if (q.get('disabled') === '1') next.setAttribute('aria-disabled', 'true');   // 本页恰好临时不可用
+</script>
+</body>
+</html>

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>容器子树里的无关 setsize 控件</title>
+<style>body{font-family:system-ui,sans-serif;margin:0;padding:16px}
+.widget{list-style:none;color:#888}</style>
+</head>
+<body>
+<!-- 第八轮评审 A（实测 S，第三个实例）：`setsize_reached` 的查询范围是**容器子树**，
+     所以记录容器里嵌一个小控件（轮播/分页小圆点）就够了；而 `ownOf` 里它「无条件有主」。
+     致命的是：一致性降级（collected > declared → 降级）只装在主循环里，
+     没装进空组判决那条**早退**路径 —— 同一份矛盾（1 vs 5）长预算那趟被点名降级、
+     短预算那趟被当成终态。
+     这里：容器内 `role=tablist` 的小控件带 aria-setsize=1；列表 4 页 × 5 条 = 20 条；
+     第 2 页起慢加载（清空记录但**保留控件**、分页器临时禁用）。 -->
+<main id="main">
+  <ul id="results"></ul>
+  <nav class="pager"><a id="next" href="?p=2">下一页</a></nav>
+</main>
+<script>
+const q = new URLSearchParams(location.search);
+const p = Math.max(1, parseInt(q.get('p') || '1', 10));
+const PER = 5, TOTAL = 20;
+const DELAY = parseInt(q.get('delay') || '3000', 10);
+const results = document.getElementById('results');
+const next = document.getElementById('next');
+const pages = Math.ceil(TOTAL / PER);
+const widget = q.get('range')
+  // 第八轮评审 E1 的同型变体：容器**内部**嵌一个自带区间计数器的小控件
+  // （`1-3 of 3` 形状自洽）——看 `from.range_reached='container'` 那条有主判据会不会把它当自己的账。
+  ? '<li class="widget"><span class="pg">1-3 of 3</span></li>'
+  : '<li class="widget" role="tablist">'
+    + '<span class="dot" role="tab" aria-setsize="1" aria-posinset="1">1</span></li>';
+const rows = (from) => {
+  let h = '';
+  for (let i = from; i < Math.min(from + PER, TOTAL); i++) {
+    h += '<li class="card"><a class="title" href="?item=' + i + '">第 ' + i + ' 条记录</a>'
+       + '<span class="meta">标签' + i + '</span></li>';
+  }
+  return h;
+};
+const keep = (extra) => {
+  const o = Object.fromEntries(q);
+  delete o.p;
+  return new URLSearchParams({ ...o, ...extra }).toString();
+};
+// 控件**始终在容器里**（包括第 2 页清空记录之后）——这正是「容器子树」这个域太宽的地方
+if (p <= 1) {
+  results.innerHTML = rows(0) + widget;
+  next.href = '?' + keep({ p: 2 });
+} else {
+  results.innerHTML = widget;
+  next.setAttribute('aria-disabled', 'true');
+  setTimeout(() => {
+    results.innerHTML = rows((p - 1) * PER) + widget;
+    if (p < pages) { next.removeAttribute('aria-disabled'); next.href = '?' + keep({ p: p + 1 }); }
+  }, DELAY);
+}
+</script>
+</body>
+</html>

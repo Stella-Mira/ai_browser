@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>纯图形分页器 + 一页装得下的声明</title>
+<style>body{font-family:system-ui,sans-serif;margin:0;padding:16px}
+.grp{list-style:none;color:#888}#next{border:0;background:none;cursor:pointer}</style>
+</head>
+<body>
+<!-- 第十轮评审 A（实测 S）：`findAdvance` 靠**文本/aria-label/title** 找分页器，
+     所以纯 SVG 图标箭头它看不见（`adv == null`）。旧代码把 `adv == null` 读成「页面上没有推进控件」，
+     于是「容器内小控件声明 1-5 of 5（== 本页 5 条）」这条声明被允许收工 → exhausted/resume=false，
+     而点一下那个箭头就是第 2 页（评审取证：点击前 [第0…第4]，点击后 [第5…第9]）。
+     正确行为：把「认不出」当**第三态**（`one_page_total_pager: "undetectable"`），不发终态。 -->
+<main id="main">
+  <ul id="results"></ul>
+  <nav class="pager"><button id="next" aria-label=""><svg width="24" height="24" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button></nav>
+</main>
+<script>
+const q = new URLSearchParams(location.search);
+let p = Math.max(1, parseInt(q.get('p') || '1', 10));
+const PAGES = parseInt(q.get('pages') || '3', 10);   // pages=1 → 真的只有一页（正例）
+const PER = 5;
+const results = document.getElementById('results');
+const next = document.getElementById('next');
+const widget = '<li class="grp"><span>本组 1-' + PER + ' of ' + PER + '</span></li>';
+const rows = (from) => {
+  let h = '';
+  for (let i = from; i < from + PER; i++) {
+    h += '<li class="card"><a class="title" href="?item=' + i + '">第 ' + i + ' 条记录</a>'
+       + '<span class="meta">标签' + i + '</span></li>';
+  }
+  return h;
+};
+const render = () => {
+  results.innerHTML = widget + rows((p - 1) * PER);
+  next.style.display = (p < PAGES) ? '' : 'none';     // 没有下一页时，箭头**整个消失**
+};
+next.addEventListener('click', () => { if (p < PAGES) { p += 1; render(); } });
+render();
+</script>
+</body>
+</html>

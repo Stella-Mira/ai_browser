@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>会话状态测试</title></head>
+<body>
+<main>
+<h1>计数器</h1>
+<p id="cnt">点击数 0</p>
+<button id="btn">点我</button>
+</main>
+<script>
+  let n = 0;  // 存在内存里：页面重载即归零，可用于检测会话是否有状态
+  document.getElementById('btn').addEventListener('click', () => {
+    n++;
+    document.getElementById('cnt').innerText = '点击数 ' + n;
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+.venv/
+profiles/
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.api_token
+# 凭据类：cookie 导出文件、UA 记录（绝不入库）
+*_cookies.json
+cookies*.json
+qidian_ua.txt
+.ai_shell/
+
+# 运行期产物（发布版补充）
+*.log
+tmp/
+.pw-browsers/
+.tmp_suite_*

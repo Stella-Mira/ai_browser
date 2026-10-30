@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>登录态测试</title></head>
+<body>
+<main>
+<h1>会员中心</h1>
+<p id="status">未登录</p>
+<button id="login-btn">模拟登录</button>
+</main>
+<script>
+  function refresh() {
+    const m = document.cookie.match(/ai_user=([^;]+)/);
+    document.getElementById('status').innerText = m ? '已登录：' + m[1] : '未登录';
+  }
+  document.getElementById('login-btn').addEventListener('click', () => {
+    document.cookie = 'ai_user=stella;path=/;max-age=86400';
+    refresh();
+  });
+  window.addEventListener('DOMContentLoaded', refresh);
+</script>
+</body>
+</html>

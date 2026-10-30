@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>追加式站点：真总数在涨 + 子组计数恒定</title>
+<style>body{font-family:system-ui,sans-serif;margin:0;padding:16px}.meta{color:#888;margin-left:8px}</style>
+</head>
+<body>
+<main id="main"><ul id="results"></ul>
+  <nav class="pager"><a id="next" href="?p=2">下一页</a></nav></main>
+<script>
+// 4 页 × 5 条 = 20 条。追加式站点：页面自己声明的总数**逐页在涨**：13 → 15 → 18 → 20。
+// 容器内另有一个**恒定**的子组计数：「本组 lo-hi of 15」（形容「本批 15 条」，跨页不变）。
+// 两候选都自洽（lo<=hi<=tot）、窗口都 = 本页条数、逐页 +5 推进——待打规则的前提全满足。
+// 待打规则「声明总数必须跨页稳定」会：保留恒定的假（15）、降级在变的真（13/15/18/20），
+// 于是 total=15；收到 15 条时 `len(rows) >= 15` 且（若分页器不可用）→ total_reached → 终态，
+// 第 16..20 条**永不读取**。
+const q = new URLSearchParams(location.search);
+const p = Math.max(1, parseInt(q.get('p') || '1', 10));
+const PAGES = 4, PER = 5, TOT = PAGES * PER;
+const lo = (p - 1) * PER + 1, hi = Math.min(p * PER, TOT);
+const SITE = [13, 15, 18, 20][p - 1];     // 真总数随页增长
+const BATCH = 15;                          // 子组恒定 15
+const list = document.getElementById('results');
+list.innerHTML = '<li class="grp"><span>本组 ' + lo + '-' + hi + ' of ' + BATCH + '</span></li>';
+for (let i = lo; i <= hi; i++) {
+  list.insertAdjacentHTML('beforeend',
+    '<li class="card"><a href="?item=' + (i - 1) + '">第 ' + (i - 1) + ' 条记录</a>'
+    + '<span class="meta">标签' + (i - 1) + '</span></li>');
+}
+const nav = document.querySelector('nav.pager');
+const prog = document.createElement('p');
+prog.className = 'progress';
+prog.textContent = '进度 ' + lo + '-' + hi + ' of ' + SITE;
+nav.appendChild(prog);
+const next = document.getElementById('next');
+next.href = '?p=' + Math.min(p + 1, PAGES);
+// 第 3 页（收到 15 条的那一刻）分页器**恰好**临时不可用，模拟「加载中别点」
+if (p === 3) {
+  next.setAttribute('aria-disabled', 'true');
+  setTimeout(() => next.removeAttribute('aria-disabled'), 2500);
+}
+if (p >= PAGES) next.setAttribute('aria-disabled', 'true');
+</script>
+</body></html>

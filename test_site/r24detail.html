@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>详情页卡片（记录**合法**含子列表）+ 混合页（垃圾块在前）</title>
+<style>body{font-family:system-ui,sans-serif;margin:0;padding:16px}
+.card,.related{list-style:none;margin:4px 0}
+.sub{margin:2px 0 2px 14px;color:#666}h3{margin:2px 0;font-size:15px}
+.related .relitems{margin:2px 0 2px 14px;color:#999}.relcount{color:#888;font-size:13px}</style>
+</head>
+<body>
+<!-- 复刻对抗评审第二十四轮的详情页形态（它的 `r24detail`）：**记录合法地含子列表**
+     （帖子带回复的常见形态）——它是「排除嵌套组」这条判据的**代价面**，
+     也是我们「将来谁想加排除判据，先跑红这条」的绊线。
+
+     开关：
+       ?subs=N   每条记录嵌 N 个子项（默认 3；`subs=2` 用来守「<3 不触发」那条边界）
+       ?mix=1    在容器**最前面**插入一块讲评论的垃圾块（评审 D1 预告的失效点：
+                 它可能成为 headSig，于是真卡片全变 deviant）
+-->
+<main id="main">
+  <ul id="results"></ul>
+  <nav class="pager"><a id="next" href="?p=2&amp;subs=3">下一页</a>
+    <p class="progress">进度 1-5 of 10</p></nav>
+</main>
+<script>
+const q = new URLSearchParams(location.search);
+const p = Math.max(1, parseInt(q.get('p') || '1', 10));
+const PAGES = 2, PER = 5, TOTAL = PAGES * PER;
+const SUBS = parseInt(q.get('subs') || '3', 10);
+const MIX = q.get('mix') === '1';
+const results = document.getElementById('results');
+const next = document.getElementById('next');
+const lo = (p - 1) * PER + 1, hi = p * PER;
+
+const card = (i) => {
+  let sub = '';
+  for (let k = 0; k < SUBS; k++) sub += '<li>回复' + k + '</li>';
+  return '<li class="card"><h3><a href="?item=' + i + '">第 ' + i + ' 条记录</a></h3>'
+       + '<span>标签' + i + '</span>'
+       + (SUBS ? '<ul class="sub">' + sub + '</ul>' : '') + '</li>';
+};
+const garbage = (n) => {
+  let li = '';
+  for (let k = 0; k < 3; k++) li += '<li class="relitem">相关 ' + k + '</li>';
+  return '<li class="related"><h4>相关推荐</h4>'
+       + '<div class="relcount">相关 3 条：1-3 of 3</div>'
+       + '<ul class="relitems">' + li + '</ul></li>';
+};
+let html = '';
+if (MIX && p === 1) html += garbage();          // 垃圾块排在**文档序第一**（headSig 污染面）
+for (let i = lo; i <= hi; i++) html += card(i);
+if (MIX && p === 1) html += '';                  // 只在第一页插一次，免得混进记录数
+results.innerHTML = html;
+document.querySelector('.progress').textContent = '进度 ' + lo + '-' + hi + ' of ' + TOTAL;
+if (p < PAGES) {
+  next.href = '?p=' + (p + 1) + '&subs=' + SUBS;
+} else {
+  next.setAttribute('aria-disabled', 'true');
+}
+</script>
+</body>
+</html>

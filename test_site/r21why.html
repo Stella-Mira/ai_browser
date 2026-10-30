@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>区间候选注入：逐个触发 drop_why 的取值</title>
+<style>body{font-family:system-ui,sans-serif;margin:0;padding:16px}
+.grp{list-style:none;color:#888}.progress{color:#666}</style>
+</head>
+<body>
+<!-- 第二十一轮对抗评审 B 的注入法（它用它把四条 unsaneWhy 逐条打完我复刻一份入库）：
+     `?c=<文本>` 直接把一段区间文本塞进容器，用来精确触发 `saneRange`/`unsaneWhy` 的每条分支。
+     它的结论：**`window_gt_tot` 按构造不可达**（走到那条时已有 lo<=hi 且 hi<=tot，
+     `hi-lo+1 <= hi <= tot` 恒真）⇒ 那条分支是死代码、那个枚举值永远不会出现 —— 已删。
+     T110 用这张表的三个可达取值钉「恰好三个、不多不少」。 -->
+<main id="main">
+  <ul id="results"></ul>
+  <nav class="pager"><a id="next" href="?p=1" aria-disabled="true">下一页</a>
+    <p class="progress">进度 1-5 of 15</p></nav>
+</main>
+<script>
+const q = new URLSearchParams(location.search);
+const CAND = q.get('c') || '1-5 of 15';      // 注入的候选文本（默认自洽）
+const results = document.getElementById('results');
+let h = '<li class="grp"><span>' + CAND + '</span></li>';
+for (let i = 1; i <= 5; i++) {
+  h += '<li class="card"><a class="title" href="?item=' + i + '">第 ' + i + ' 条记录</a>'
+     + '<span class="meta">标签' + i + '</span></li>';
+}
+results.innerHTML = h;
+// 真进度：与本页 5 条对齐且**未收满**（1-5 of 15），所以它才是「这份列表的账」；
+// 注入的那条只当候选，用来观察 `drop_why`。
+</script>
+</body>
+</html>

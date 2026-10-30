@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>声明总数恰好等于已收条数</title>
+<style>body{font-family:system-ui,sans-serif;margin:0;padding:16px}
+.grp{list-style:none;color:#888}</style>
+</head>
+<body>
+<!-- 第九轮评审 A（实测 S，等式形态）：两道守卫都是**不等式**，于是「声明 == 已收」这一格是空的。
+     这里：第 1 页 15 条记录，容器内嵌一个小控件写「本组 1-15 of 15」（窗口 15 == 本页 15 → 窗口检查放行；
+     已收 15 不大于 15 → 一致性降级放行），分页器在这一页临时不可用 2.5s，真实数据还有第 2 页 15 条。
+     旧行为：`total_reached` → exhausted/resume=false，第 2 页永远读不到（静默丢 15 条）。
+     正确行为：`total_within_one_page` 具名观测为真 → 不发终态（stalled），并在 stop_detail 里点名。 -->
+<main id="main">
+  <ul id="results"></ul>
+  <nav class="pager"><a id="next" href="?p=2">下一页</a></nav>
+</main>
+<script>
+const q = new URLSearchParams(location.search);
+const p = Math.max(1, parseInt(q.get('p') || '1', 10));
+const PER = parseInt(q.get('per') || '15', 10);
+const TOTAL = PER * 2;                       // 两页：第 2 页永远还有货
+const DECL = parseInt(q.get('decl') || String(PER), 10);
+const DISABLED = q.get('disabled') !== '0';  // 第 1 页分页器临时不可用（站点正在重渲染下一批）
+const results = document.getElementById('results');
+const next = document.getElementById('next');
+const rows = (from) => {
+  let h = '';
+  for (let i = from; i < Math.min(from + PER, TOTAL); i++) {
+    h += '<li class="card"><a class="title" href="?item=' + i + '">第 ' + i + ' 条记录</a>'
+       + '<span class="meta">标签' + i + '</span></li>';
+  }
+  return h;
+};
+const widget = '<li class="grp"><span>本组 1-' + DECL + ' of ' + DECL + '</span></li>';
+results.innerHTML = widget + rows((p - 1) * PER);
+next.href = '?p=' + Math.min(p + 1, 2) + '&per=' + PER + '&decl=' + DECL
+          + (DISABLED ? '&disabled=1' : '&disabled=0');
+if (p === 1) {
+  if (DISABLED) {
+    next.setAttribute('aria-disabled', 'true');           // 加载中：暂时别点
+    setTimeout(() => next.removeAttribute('aria-disabled'), 2500);
+  }
+} else {
+  next.setAttribute('aria-disabled', 'true');             // 第 2 页（最后一页）：站点常这么干
+}
+</script>
+</body>
+</html>

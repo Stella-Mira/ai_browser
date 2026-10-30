@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>真计数器 + 假进度（末页时真已收满、假未收满）</title>
+<style>body{font-family:system-ui,sans-serif;margin:0;padding:16px}
+.grp{list-style:none;color:#888}.progress{color:#666}</style>
+</head>
+<body>
+<!-- 第十六轮评审 A（实测 bug）：`pickBest` 的优先键①「没收满的优先」在**末页**反向生效——
+     真计数器在末页必然已收满（「11-15 of 15」），而假进度可以**未收满**（「本组 11-15 of 50」），
+     于是键①把假的排到了真的前面，键②（tot 大优先）根本轮不到。
+     这里容器内有两条区间文本：假「本组 <本页区间> of FAKE」、真「进度 <本页区间> of TOTAL」。
+     `?fake=N` 可调假计数器的总数（50/20/16/15 四档在评审的矩阵里）。 -->
+<main id="main">
+  <ul id="results"></ul>
+  <nav class="pager"><a id="next" href="?p=2">下一页</a>
+    <p class="progress">进度 1-5 of 15</p></nav>
+</main>
+<script>
+const q = new URLSearchParams(location.search);
+const p = Math.max(1, parseInt(q.get('p') || '1', 10));
+const PAGES = parseInt(q.get('pages') || '3', 10);
+const PER = 5, TOTAL = PAGES * PER;
+const FAKE = parseInt(q.get('fake') || '50', 10);
+// `decoy=run`：诱饵的 tot **跟着已收条数走**（「本组 6-10 of 10」）——它总是「已收满」，
+// 而真进度在非末页总是「没收满」。这一档是**规则层反例**：任何「信已收满的那条」的排序
+// 都会在分页器不可用时拿 10 当总数收工（真总数 15 → 静默丢 5 条）。
+const RUN = q.get('decoy') === 'run';
+// `dis=N`：第 N 页起分页器被禁用（模拟「翻到一半站点把控件禁掉」的加载态）
+const DIS = parseInt(q.get('dis') || '0', 10);
+// `real=0`：**页面上只有那个子组计数器**（没有真进度可对账）——第十七轮我自查的残余档：
+// 评审下一轮要打的 `only_sane_candidate`。此时没有「分歧」可暴露，若那个计数器已收满
+// 且 tot > 本页条数，它就会被当成这份列表的账（预测：exhausted + total=10 + resume=false）。
+const REAL = q.get('real') !== '0';
+const results = document.getElementById('results');
+const next = document.getElementById('next');
+const lo = (p - 1) * PER + 1, hi = p * PER;
+const decoyTot = RUN ? hi : FAKE;
+const decoy = '<li class="grp"><span>本组 ' + lo + '-' + hi + ' of ' + decoyTot + '</span></li>';
+const rows = (from) => {
+  let h = '';
+  for (let i = from; i < from + PER; i++) {
+    h += '<li class="card"><a class="title" href="?item=' + i + '">第 ' + i + ' 条记录</a>'
+       + '<span class="meta">标签' + i + '</span></li>';
+  }
+  return h;
+};
+results.innerHTML = decoy + rows((p - 1) * PER);
+if (REAL) document.querySelector('.progress').textContent = '进度 ' + lo + '-' + hi + ' of ' + TOTAL;
+else document.querySelector('.progress').remove();
+if (p < PAGES) next.href = '?p=' + (p + 1) + '&pages=' + PAGES + '&fake=' + FAKE
+                           + (RUN ? '&decoy=run' : '') + (DIS ? '&dis=' + DIS : '')
+                           + (REAL ? '' : '&real=0');
+else next.setAttribute('aria-disabled', 'true');
+if (DIS && p >= DIS) next.setAttribute('aria-disabled', 'true');
+</script>
+</body>
+</html>

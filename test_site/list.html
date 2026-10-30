@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>翻页列表</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; }
+  .card { padding: 6px 0; }
+  .meta { color: #888; margin-left: 8px; }
+</style>
+</head>
+<body>
+<header><h1>搜索结果</h1></header>
+<main>
+  <ul class="results" id="results"></ul>
+  <p class="total" id="total">1-5 of 15</p>
+  <nav class="pager">
+    <a id="prev" href="list.html?p=1">上一页</a>
+    <a id="next" href="list.html?p=2">下一页</a>
+  </nav>
+</main>
+<script>
+// 离线测试夹具：3 页 × 5 条 = 15 条，用 ?p=N 翻页。
+// mode 用来制造 collect 必须分辨的几种局面：
+//   （默认）5 条同构、每条一个链接      -> 正常抓取
+//   multi   第 3 条多一个链接           -> multi>0：默认 heading 策略取值 + 回候选样本
+//   hetero  2/5 条多一个 <span> 尾巴    -> 异构 >20%，应 needs_confirm（deviants="skip" 可跳过）
+//   stuck   「下一页」指向同一个 URL    -> 推进**没生效** → stalled（可续跑）
+//   cycle   第 2 页起喂第 1 页的内容    -> 推进生效但内容全是已见 → repeat（不可续跑）
+//   dup     页内 2 条与第 1 条完全相同  -> 页内重复只计数，**永不触发停止**
+//   serp    4 张卡片、两种完全不同的内部结构（像搜索结果页）-> 记录组按「主标签的兄弟」定
+//   pair    6 组「标题行 + 副信息行」（像 HN）-> 锚定式合并成 6 条完整记录
+const TOTAL = 15, PER = 5;
+const q = new URLSearchParams(location.search);
+const mode = q.get('mode') || 'ok';
+const p = Math.max(1, Math.min(3, parseInt(q.get('p') || '1', 10)));
+// cycle：第 2 页起喂的还是第 1 页的内容（URL 变了、内容没变）
+const start = (mode === 'cycle' && p > 1) ? 0 : (p - 1) * PER;
+const rows = [];
+if (mode === 'serp' && p === 1) {
+  // 两种结构完全不同的结果条目：只认同构会只抓到 2 条，按主标签才能抓到 4 条
+  rows.push('<div class="card"><a href="list.html?item=a">甲结果标题</a><span>甲摘要</span></div>');
+  rows.push('<div class="card"><a href="list.html?item=b">乙结果标题</a><span>乙摘要</span></div>');
+  rows.push('<div class="card"><img src="lazy-real.png" alt=""><a href="list.html?item=c">丙结果标题</a>'
+            + '<div>丙来源</div><p>丙摘要更长一些</p></div>');
+  rows.push('<div class="card"><img src="lazy-real.png" alt=""><a href="list.html?item=d">丁结果标题</a>'
+            + '<div>丁来源</div><p>丁摘要更长一些</p></div>');
+}
+if (mode === 'pair') {
+  // 每组两行：标题行（含链接）+ 副信息行（不含链接）。合并的锚点是「第一行的签名」。
+  for (let i = 0; i < 6; i++) {
+    rows.push('<div class="row"><a href="list.html?item=' + i + '">标题 ' + i + '</a>'
+              + '<span>来源' + i + '</span></div>');
+    rows.push('<div class="meta">' + (i * 7 + 3) + ' 分 · ' + (i * 11) + ' 评论</div>');
+  }
+}
+for (let i = start; i < Math.min(start + PER, TOTAL) && mode !== 'serp' && mode !== 'pair'; i++) {
+  const extraSpan = (mode === 'hetero' && (i % PER === 1 || i % PER === 4)) ? '<span class="badge">广告</span>' : '';
+  // multi：第 3 条的「次选」链接**排在标题链接前面**，这样 multi_policy 的取值规则才有区别：
+  //   first -> 取到「次选」（错），heading/longest_text -> 取到标题（对）
+  const pre = (mode === 'multi' && i % PER === 2) ? '<a href="list.html?x=' + i + '">次选</a>' : '';
+  // dup：第 3、4 条与第 1 条完全一样（页内重复）
+  const n = (mode === 'dup' && (i % PER === 2 || i % PER === 3)) ? 0 : i;
+  rows.push('<li class="card">' + pre + '<a class="title" href="list.html?item=' + n + '">第 ' + n + ' 条记录</a>'
+            + '<span class="meta">标签' + n + '</span>' + extraSpan + '</li>');
+}
+document.getElementById('results').innerHTML = rows.join('');
+document.getElementById('total').textContent =
+  (mode === 'serp') ? '1-4 of 4'
+    : (mode === 'pair') ? '1-6 of 6'
+    : (start + 1) + '-' + Math.min(start + PER, TOTAL) + ' of ' + TOTAL;
+const next = document.getElementById('next');
+const prev = document.getElementById('prev');
+next.setAttribute('href', 'list.html?p=' + Math.min(p + 1, 3) + (mode === 'ok' ? '' : '&mode=' + mode));
+prev.setAttribute('href', 'list.html?p=' + Math.max(p - 1, 1) + (mode === 'ok' ? '' : '&mode=' + mode));
+if (p <= 1) prev.setAttribute('aria-disabled', 'true');
+if (p >= 3) next.setAttribute('aria-disabled', 'true');
+if (mode === 'stuck') {
+  // 「点了完全没反应」的推进控件：换成没有处理函数的 button。
+  // 为什么不用「指向同一内容的链接」：那会真的重新导航、列表被重建——那是 cycle(站点在循环)，
+  // 不是 stalled(推进没生效)。判级 agent 把这两者分得很清楚：重建了才是循环。
+  const btn = document.createElement('button');
+  btn.id = 'next';
+  btn.textContent = '下一页';
+  next.replaceWith(btn);
+}
+</script>
+</body>
+</html>

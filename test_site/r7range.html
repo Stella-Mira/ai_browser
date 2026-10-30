@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>无关的区间计数器 + 慢加载的空壳</title>
+<style>body{font-family:system-ui,sans-serif;margin:0;padding:16px}#board{color:#666}</style>
+</head>
+<body>
+<!-- 第七轮评审 C（实测 S）：`range_reached` 的来源是 scope = lca(容器, 分页器)，
+     它经常是整页的 main —— 于是**任何**一块无关内容写的自洽区间计数器都成了「这份列表到底了」。
+     这里：另一块内容自带计数器「本期榜单 1-5 共 5，与上方列表无关」，而结果列表有 20 条、
+     第 2 页起慢加载（空壳 + 分页器临时禁用）。旧实现：5 条 + exhausted + resume=false。
+     正确行为：作用域级的区间在**空列表**上不算「有主的宣告」→ stalled（可续跑），
+     并把它点名进 ignored_declarations。 -->
+<main id="main">
+  <div id="board"><p id="boardtext">本期榜单 1-5 共 5，与上方列表无关。</p></div>
+  <ul id="results"></ul>
+  <nav class="pager"><a id="next" href="?p=2">下一页</a></nav>
+</main>
+<script>
+const q = new URLSearchParams(location.search);
+if (q.get('match')) {
+  // 判级 agent 的对称探针：无关计数器**恰好等于**已收条数（20==20），
+  // 「collected > declared」查不出来 → 必须靠「窗口 == 本页条数」（窗口 20 vs 本页 5）拦下。
+  document.getElementById('boardtext').textContent = '本期榜单 1-20 共 20，与上方列表无关。';
+}
+const p = Math.max(1, parseInt(q.get('p') || '1', 10));
+const PER = 5, TOTAL = 20;
+const DELAY = parseInt(q.get('delay') || '3000', 10);
+const results = document.getElementById('results');
+const next = document.getElementById('next');
+const rows = (from) => {
+  let h = '';
+  for (let i = from; i < Math.min(from + PER, TOTAL); i++) {
+    h += '<li class="card"><a class="title" href="?item=' + i + '">第 ' + i + ' 条结果</a>'
+       + '<span class="meta">标签' + i + '</span></li>';
+  }
+  return h;
+};
+const pages = Math.ceil(TOTAL / PER);
+const keep = (extra) => {
+  const o = Object.fromEntries(q);
+  delete o.p;
+  return new URLSearchParams({ ...o, ...extra }).toString();
+};
+if (p <= 1) {
+  results.innerHTML = rows(0);
+  next.href = '?' + keep({ p: 2 });
+} else if (q.get('fast')) {
+  // 判级 agent 的探针：每一页**立即**渲染（没有慢加载的空壳期），
+  // 用来隔离出「有记录 + 无关计数器」这一侧——看那个「共 5」会不会被当成本列表的总数。
+  results.innerHTML = rows((p - 1) * PER);
+  if (p < pages) next.href = '?' + keep({ p: p + 1 });
+  else if (q.get('dead')) next.setAttribute('aria-disabled', 'true');   // 只压「末页分页器消失」那一半
+} else {
+  results.innerHTML = '';
+  next.setAttribute('aria-disabled', 'true');
+  setTimeout(() => {
+    results.innerHTML = rows((p - 1) * PER);
+    if (p < pages) { next.removeAttribute('aria-disabled'); next.href = '?' + keep({ p: p + 1 }); }
+  }, DELAY);
+}
+</script>
+</body>
+</html>

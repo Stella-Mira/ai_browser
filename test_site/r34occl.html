@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>r34 遮挡形态档：谁盖着谁、盖了多少、那是什么</title>
+<style>body{margin:0;font-family:system-ui}#t{padding:8px 16px;margin:40px}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:9}</style></head>
+<body>
+<!-- 用途（第三十一轮·①／T123）：一只可点目标 `#t`，只改"盖在它上面的是什么"。
+     `?mode=` 六档：
+       none      无遮挡（对照）                    backdrop  全屏半透明遮罩（rgba）
+       canvas    遮罩 + 子 canvas（pointer-events:auto —— Live2D 那类）
+       cover     另一个 div **只压住目标**（非遮罩命名、非全屏）
+       zero      目标 0×0                          offscreen 目标在视口外（需要滚动）
+     要害（本轮先量出来的）：现在**只**报 `blocked_by=overlay:div`，
+     `backdrop` 与 `cover` **同类**——而两者的处置相反（前者要关浮层，后者可能只需滚动/换点）。 -->
+<button id="t" onclick="document.title='clicked'">目标按钮</button>
+<div id="pane"></div>
+<script>
+const P = new URLSearchParams(location.search);
+const MODE = P.get('mode') || 'none';
+const pane = document.getElementById('pane');
+const html = {
+  none: '',
+  backdrop: "<div class='ov' id='ov1'></div>",
+  canvas: "<div class='ov' id='ov2'><canvas id='cv' width='300' height='200' style='pointer-events:auto'></canvas></div>",
+  cover: "<div id='cover1' style='position:absolute;left:40px;top:40px;width:220px;height:70px;background:#f00;opacity:.25;z-index:9'></div>",
+  zero: "<style>#t{width:0;height:0;padding:0;margin:40px}</style>",
+  offscreen: "<div style='height:3000px'></div>"
+}[MODE] || '';
+pane.innerHTML = html;
+// offscreen 档必须让**按钮自己**在视口外：占位块要在它前面 ⇒ 把按钮挪到占位块之后。
+// （第一版把占位块放在按钮后面，按钮其实还在视口内 ⇒ 靶子期望写错，是实测把它抓出来的。）
+if (MODE === 'offscreen') { pane.appendChild(document.getElementById('t')); }
+</script>
+</body></html>

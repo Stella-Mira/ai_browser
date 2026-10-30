@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>每页条数不等 + 两个计数器</title>
+<style>body{font-family:system-ui,sans-serif;margin:0;padding:16px}.meta{color:#888;margin-left:8px}</style>
+</head>
+<body>
+<main id="main"><ul id="results"></ul>
+  <nav class="pager"><a id="next" href="?p=2">下一页</a></nav></main>
+<script>
+// 站点每页条数**不等**（第 1 页 5 条、第 2 页 7 条、第 3 页 3 条，共 15 条）。
+// 容器内有两条区间文本：
+//   ① 子组计数器「本组 1-<本页hi> of <本页hi>」——**跟随本页**，于是逐页 tot 不同、窗口=本页条数
+//   ② 真进度「<本页lo>-<本页hi> of 15」——tot 恒定 15、窗口=本页条数
+// 两者的窗口都**按本页条数推进**（都等于本页条数），所以「窗口按本页条数推进」这条前提
+// 无法把它们分开；能分开的只有「谁的 tot 跨页稳定」。
+const q = new URLSearchParams(location.search);
+const p = Math.max(1, parseInt(q.get('p') || '1', 10));
+const SIZE = { 1: 5, 2: 7, 3: 3 };
+const PAGES = 3, TOT = 15;
+let lo = 1;
+for (let i = 1; i < p; i++) lo += SIZE[i];
+const hi = Math.min(lo + SIZE[p] - 1, TOT);
+const list = document.getElementById('results');
+list.innerHTML = '<li class="grp"><span>本组 ' + lo + '-' + hi + ' of ' + hi + '</span></li>'
+               + '<li class="grp2"><span>进度 ' + lo + '-' + hi + ' of ' + TOT + '</span></li>';
+for (let i = lo; i <= hi; i++) {
+  list.insertAdjacentHTML('beforeend',
+    '<li class="card"><a href="?item=' + (i - 1) + '">第 ' + (i - 1) + ' 条记录</a>'
+    + '<span class="meta">标签' + (i - 1) + '</span></li>');
+}
+const next = document.getElementById('next');
+next.href = '?p=' + Math.min(p + 1, PAGES);
+if (p >= PAGES) next.setAttribute('aria-disabled', 'true');
+</script>
+</body></html>

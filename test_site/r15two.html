@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>容器内两个自洽计数器：假在前、真在后</title>
+<style>body{font-family:system-ui,sans-serif;margin:0;padding:16px}
+.grp{list-style:none;color:#888}</style>
+</head>
+<body>
+<!-- 第十五轮评审 A（实测 bug）：容器**子树内**有两个自洽计数器时，选择规则退化成
+     「文档序第一个」，而假计数器的惯用手法正是写在真计数器前面。
+     这里：①文档序在前「本组 1-5 of 5」（假：描述子组，且已“收满”）②文档序在后「进度 1-5 of 15」（真进度）。
+     两个都 where=container、都 sane、窗口都等于本页 5 条 —— 唯一区别是文档序与 tot。
+     修法：候选排序改成**「未收满的优先，其次 tot 大的优先」**（不再按文档序）：
+     假计数器按定义描述的是「已经完整的东西」（hi>=tot），真进度在非末页必然 hi<tot；
+     而真列表的总数 ≥ 任何子组的总数。 -->
+<main id="main">
+  <ul id="results"></ul>
+  <nav class="pager"><a id="next" href="?p=2">下一页</a>
+    <p class="progress">进度 1-5 of 15</p></nav>
+</main>
+<script>
+const q = new URLSearchParams(location.search);
+const p = Math.max(1, parseInt(q.get('p') || '1', 10));
+const PAGES = parseInt(q.get('pages') || '3', 10);
+const PER = 5, TOTAL = PAGES * PER;
+const results = document.getElementById('results');
+const next = document.getElementById('next');
+const decoy = '<li class="grp"><span>本组 1-' + PER + ' of ' + PER + '</span></li>';
+const rows = (from) => {
+  let h = '';
+  for (let i = from; i < from + PER; i++) {
+    h += '<li class="card"><a class="title" href="?item=' + i + '">第 ' + i + ' 条记录</a>'
+       + '<span class="meta">标签' + i + '</span></li>';
+  }
+  return h;
+};
+results.innerHTML = decoy + rows((p - 1) * PER);
+document.querySelector('.progress').textContent =
+  '进度 ' + ((p - 1) * PER + 1) + '-' + (p * PER) + ' of ' + TOTAL;
+if (p < PAGES) next.href = '?p=' + (p + 1) + '&pages=' + PAGES;
+else next.setAttribute('aria-disabled', 'true');
+if (q.get('disabled') === '1') next.setAttribute('aria-disabled', 'true');   // 本页恰好临时不可用
+</script>
+</body>
+</html>

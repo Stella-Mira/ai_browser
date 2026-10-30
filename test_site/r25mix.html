@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>记录模板允许变体（子列表项数交替）+ 头/尾垃圾块（评审第二十五轮 A/B 的复刻）</title>
+<style>body{font-family:system-ui,sans-serif;margin:0;padding:16px}
+.card,.related{list-style:none;margin:4px 0}.sub{margin:2px 0 2px 14px;color:#666}
+h3{margin:2px 0;font-size:15px}.relitems{margin:2px 0 2px 14px;color:#999}.relcount{color:#888;font-size:13px}</style>
+</head>
+<body>
+<!-- 复刻对抗评审第二十五轮的两条形状（它没交接夹具，我按描述造、文件名用自己的）：
+
+     A（S 形，静默丢数据）：卡片**合法地**含子列表，而子列表**项数逐条交替** 3/2/3/2…
+       ⇒ 两种签名交替，恰好满足「一个续行族 + 严格交替」的合并门槛 ⇒
+       「2 项」的那条**完整记录**被当成前一条的续行吞掉：5 条收成 3 条、两条文本被拼进一个字段值，
+       而 `deviant=0` / `data=ok` / `needs_confirm` 不响。开关 `?subvar=1` 打开这个变体。
+
+     B（头尾不对称）：同一个「不属于这份列表的块」放在容器**开头**只被 `lead_siblings` 数一下、
+       不进 records 也不进 deviants（**没有任何信号**）；放在**末尾**才触发 `needs_confirm`。
+       开关 `?mix=N`（块数）+ `?pos=first|last`。
+
+     其它开关：`?pages=2`、`?subs=N`（子项数，subvar=0 时所有卡片一致）。
+-->
+<main id="main">
+  <ul id="results"></ul>
+  <nav class="pager"><a id="next" href="?p=2&amp;subs=3">下一页</a>
+    <p class="progress">进度 1-5 of 10</p></nav>
+</main>
+<script>
+const q = new URLSearchParams(location.search);
+const p = Math.max(1, parseInt(q.get('p') || '1', 10));
+const PAGES = parseInt(q.get('pages') || '2', 10), PER = 5, TOTAL = PAGES * PER;
+const SUBS = parseInt(q.get('subs') || '3', 10);
+const SUBVAR = q.get('subvar') === '1';
+const MIX = parseInt(q.get('mix') || '0', 10);
+const POS = q.get('pos') || 'first';
+const results = document.getElementById('results');
+const next = document.getElementById('next');
+const lo = (p - 1) * PER + 1, hi = p * PER;
+
+const card = (i) => {
+  // subvar：让子列表项数在 3 / 2 之间交替（真实站点里「有的帖子 3 条回复、有的 2 条」是常态）
+  const n = SUBVAR ? (i % 2 === 0 ? Math.max(SUBS, 3) : Math.max(SUBS - 1, 1)) : SUBS;
+  let sub = '';
+  for (let k = 0; k < n; k++) sub += '<li>回复' + k + '</li>';
+  return '<li class="card"><h3><a href="?item=' + i + '">第 ' + i + ' 条记录</a></h3>'
+       + '<span>标签' + i + '</span>'
+       + (n ? '<ul class="sub">' + sub + '</ul>' : '') + '</li>';
+};
+const garbage = () => {
+  let li = '';
+  for (let k = 0; k < 3; k++) li += '<li class="relitem">相关 ' + k + '</li>';
+  return '<li class="related"><h4>相关推荐</h4>'
+       + '<div class="relcount">相关 3 条：1-3 of 3</div>'
+       + '<ul class="relitems">' + li + '</ul></li>';
+};
+let html = '';
+const blocks = MIX ? Array.from({ length: MIX }, garbage).join('') : '';
+if (blocks && POS === 'first') html += blocks;
+for (let i = lo; i <= hi; i++) html += card(i);
+if (blocks && POS === 'last') html += blocks;
+results.innerHTML = html;
+document.querySelector('.progress').textContent = '进度 ' + lo + '-' + hi + ' of ' + TOTAL;
+if (p < PAGES) {
+  next.href = '?p=' + (p + 1) + '&subs=' + SUBS + (SUBVAR ? '&subvar=1' : '')
+             + (MIX ? '&mix=' + MIX + '&pos=' + POS : '');
+} else {
+  next.setAttribute('aria-disabled', 'true');
+}
+</script>
+</body>
+</html>

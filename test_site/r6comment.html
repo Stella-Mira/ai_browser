@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>「没有更多」属于哪张列表</title>
+<style>body{font-family:system-ui,sans-serif;margin:0;padding:16px}
+#comments{margin-top:12px;border-top:1px solid #ddd}
+</style>
+</head>
+<body>
+<main id="main">
+  <ul id="results"></ul>
+  <!-- 关键：记录容器的**下一个兄弟**是另一个组件（评论区），里面写着「没有更多评论了」。
+       旧实现把「容器文本 + 兄弟文本」拼接后匹配，于是这句**别人的账**把结果列表宣告终结
+       （end:true + exhausted + resume:false）。正确行为：它过不了「像列表页脚」的结构闸
+       （有 h2 标题、元素多于 3 个），只作为弱信号 no_more_text_sibling 上报。 -->
+  <div id="comments">
+    <h2>评论</h2>
+    <p id="cmsg">没有更多评论了</p>
+  </div>
+  <nav class="pager"><a id="next" href="?p=2">下一页</a></nav>
+</main>
+<script>
+const q = new URLSearchParams(location.search);
+const p = Math.max(1, parseInt(q.get('p') || '1', 10));
+const TOTAL = parseInt(q.get('total') || '20', 10);
+const PER = 5;
+const results = document.getElementById('results');
+const next = document.getElementById('next');
+let h = '';
+for (let i = (p - 1) * PER; i < Math.min(p * PER, TOTAL); i++) {
+  h += '<li class="card"><a class="title" href="?item=' + i + '">第 ' + i + ' 条记录</a>'
+     + '<span class="meta">标签' + i + '</span></li>';
+}
+results.innerHTML = h;
+const pages = Math.ceil(TOTAL / PER);
+if (p >= pages) next.setAttribute('aria-disabled', 'true');
+else next.href = '?p=' + (p + 1) + '&total=' + TOTAL;
+</script>
+</body>
+</html>

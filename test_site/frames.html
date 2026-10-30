@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>正文在 iframe 里面</title>
+<style>body{font-family:system-ui,sans-serif;margin:0;padding:16px}
+iframe{width:600px;height:300px;border:1px solid #ddd}</style>
+</head>
+<body>
+<!-- AGENT_BOARD（Kimi）提的第 3 条：正文在 iframe 里时提取器看不到它。
+     「做不到」这件事本身先记为**已知限制**，但**盲区必须可观测**：
+     页面 JSON 现在带 `frames: [{src,w,h}]`，`stats.counts.frames` 也计数，
+     于是「内容就这些」与「正文在 iframe 里没被看到」在回包里可区分。 -->
+<main id="main">
+  <h1>外层页面</h1>
+  <p>这段是外层可见文本，用来对照：真正的正文在内嵌页面里。</p>
+  <iframe src="feed.html" title="内嵌正文"></iframe>
+</main>
+</body>
+</html>

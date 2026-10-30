@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>无限滚动测试</title></head>
+<body>
+<main>
+<h1>信息流</h1>
+<ul id="feed"></ul>
+</main>
+<script>
+  let loaded = 0;
+  function loadMore() {
+    const ul = document.getElementById('feed');
+    for (let i = 0; i < 5; i++) {
+      loaded++;
+      const li = document.createElement('li');
+      li.textContent = '条目 ' + loaded;
+      li.style.height = '300px';
+      ul.appendChild(li);
+    }
+  }
+  window.addEventListener('scroll', () => {
+    if (window.innerHeight + window.scrollY >= document.body.scrollHeight - 200) loadMore();
+  });
+  window.addEventListener('DOMContentLoaded', loadMore);
+</script>
+</body>
+</html>

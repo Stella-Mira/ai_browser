@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>容器内嵌子列表（评审第二十三轮 C 的复刻）</title>
+<style>body{font-family:system-ui,sans-serif;margin:0;padding:16px}
+.card,.related{list-style:none;margin:3px 0}.relitems{margin:2px 0 2px 14px;color:#666}
+.relcount{color:#888;font-size:13px}h4{margin:2px 0;font-size:14px}</style>
+</head>
+<body>
+<!-- 复刻对抗评审第二十三轮 C 的形状（它的 `r23nested`，我按描述造一份、文件名用自己的）：
+
+     主列表 2 页 × 5 条 = 10 条；容器 `#results` **内部**再嵌一个子列表
+     （`<li class="related"><h4>相关推荐</h4><div class="relcount">相关 3 条：1-3 of 3</div>
+        <ul class="relitems">…3 个 li…</ul></li>`）。
+
+     它实测的两条后果（本夹具用于固化「纯曝光」那一半）：
+       C1 记录组被污染：`count` 10 → 11（整块子列表被当成一条记录，多出来的文本里写着「相关推荐」）
+       C2 子计数器参与选择：`sub=3` 时两个自洽候选 ⇒ 冲突 ⇒ `total` 撤销 ⇒ 末页 `stalled`（不丢数据）；
+          `subbig=1` 时子计数**未收满** ⇒ 键①让它压过主计数被选中（`total_claimed=13`，仍是撤销态）
+
+     开关：`?sub=0` 不渲染子块（对照组）；`?sub=3` 渲染且子计数已收满（默认）；
+           `?subbig=1` 子计数的总数写成 13（未收满，用来观察键①的反向）
+-->
+<main id="main">
+  <ul id="results"></ul>
+  <nav class="pager"><a id="next" href="?p=2&amp;sub=3">下一页</a>
+    <p class="progress">进度 1-5 of 10</p></nav>
+</main>
+<script>
+const q = new URLSearchParams(location.search);
+const p = Math.max(1, parseInt(q.get('p') || '1', 10));
+const PAGES = 2, PER = 5, TOTAL = PAGES * PER;
+const SUB = parseInt(q.get('sub') || '3', 10);           // 0 = 不渲染子块
+const SUBTOT = q.get('subbig') === '1' ? 13 : SUB;       // 子计数声明的总数
+const results = document.getElementById('results');
+const next = document.getElementById('next');
+const lo = (p - 1) * PER + 1, hi = p * PER;
+
+const rows = () => {
+  let h = '';
+  for (let i = lo; i <= hi; i++) {
+    h += '<li class="card"><a class="title" href="?item=' + i + '">第 ' + i + ' 条记录</a>'
+       + '<span class="meta">标签' + i + '</span></li>';
+  }
+  return h;
+};
+// 子列表：它自己的计数器「相关 3 条：1-3 of N」——与主列表的账**不是一回事**
+const nested = () => {
+  if (!SUB) return '';
+  let li = '';
+  for (let i = 0; i < SUB; i++) li += '<li class="relitem">相关 ' + i + '</li>';
+  return '<li class="related"><h4>相关推荐</h4>'
+       + '<div class="relcount">相关 ' + SUB + ' 条：1-' + SUB + ' of ' + SUBTOT + '</div>'
+       + '<ul class="relitems">' + li + '</ul></li>';
+};
+results.innerHTML = rows() + nested();
+document.querySelector('.progress').textContent = '进度 ' + lo + '-' + hi + ' of ' + TOTAL;
+if (p < PAGES) {
+  next.href = '?p=' + (p + 1) + '&sub=' + SUB + (q.get('subbig') === '1' ? '&subbig=1' : '');
+} else {
+  next.setAttribute('aria-disabled', 'true');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>干净的两行一条（量「带链接的续行不并」这条修法的代价面）</title>
+<style>body{font-family:system-ui,sans-serif;margin:0;padding:16px}
+ul{list-style:none;padding:0;margin:0}.row{margin:6px 0}.cont{color:#777}</style>
+</head>
+<body>
+<!-- 复刻对抗评审第二十六轮 B 的代价面夹具（它的 `r26pair`）：**干净的两行一条**
+     —— 严格交替（head, cont, head, cont…），合并门槛真的会开火；只有「续行带不带链接」这一件事在变。
+
+     用途：量「续行里带链接的不并」这条修法的代价。
+       ?contlink=0 → 正常合并（5 条记录，merge.merged=5）
+       ?contlink=1 → 拒并 ⇒ **一元素一行**（10 条），而 deviant=0 / needs_confirm 不响
+                     —— 所以这条修法的代价**必须留痕**：merge.refused_link_continuations
+     评审的方法学提醒：要测一条「闸」的代价面，夹具必须先让那道闸**真的开火**，
+     否则测到的是别的分支（它第一版用三行一条的夹具跑出 `deviant=10` 的假象）。 -->
+<main id="main">
+  <ul id="results"></ul>
+  <nav class="pager"><a id="next" href="?p=2" aria-disabled="true">下一页</a>
+    <p class="progress">进度 1-5 of 5</p></nav>
+</main>
+<script>
+const q = new URLSearchParams(location.search);
+const CONTLINK = q.get('contlink') === '1';
+const N = 5;
+const results = document.getElementById('results');
+let html = '';
+for (let i = 0; i < N; i++) {
+  // head：`li.row > a.title`（记录的形状）
+  html += '<li class="row"><a class="title" href="?item=' + i + '">第 ' + i + ' 条记录</a></li>';
+  // cont：**结构必须与 head 不同**（`li.cont > span + [a]`），否则两者签名相同 ⇒
+  // 续行族为空 ⇒ 合并块根本不进入 ⇒ 测到的是「没开火」，不是这条修法。
+  // `contlink=1` 时它多带一个链接（修法会拒并）——这才是代价面。
+  html += '<li class="cont"><span>标签' + i + '</span>'
+        + (CONTLINK ? '<a class="taglink" href="?tag=' + i + '">标签链接</a>' : '') + '</li>';
+}
+results.innerHTML = html;
+</script>
+</body>
+</html>

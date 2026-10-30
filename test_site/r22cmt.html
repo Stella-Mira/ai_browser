@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>容器内深层的「没有更多评论了」+ 慢加载空壳（评审第二十二轮 A 的复刻）</title>
+<style>body{font-family:system-ui,sans-serif;margin:0;padding:16px}
+.cmtbox{list-style:none;color:#999}.card{list-style:none;margin:2px 0}
+.nomore{color:#888}</style>
+</head>
+<body>
+<!-- 复刻对抗评审第二十二轮 A 的形状（它没把 r22slow/r22inner 交接过来，我按它的描述造一份，
+     文件名用自己的，避免它以后提交同名夹具时撞车）：
+
+     `#results` **容器内部**一直挂着一个讲**评论**的子块
+     （`<li class="cmtbox"><div class="cmtfoot">没有更多评论了</div></li>`）；
+     第 2 页起记录**空壳**（`slow=1` 时 3s 后才注入 5 条）、分页器临时禁用。
+
+     旧行为（S）：容器内**任何后代**命中 NO_MORE_RE 都算 `no_more_text@container`（有主）
+     ⇒ 空组判决时 `declared=true` ⇒ `exhausted` + `resume=false` + 只拿到 5 条（真数据 20 条，3 秒后到）。
+
+     形状开关：
+       ?inner=0   把那句话挪到容器**之后**（兄弟）——第七轮的结构闸会挡住它，对照组
+       ?slow=0    单页 + 分页器禁用（隔离档：`advance=null` 那条路径，评审 A2）
+-->
+<main id="main">
+  <ul id="results"></ul>
+  <nav class="pager"><a id="next" href="?p=2&amp;inner=1&amp;slow=1">下一页</a>
+    <p class="progress">进度 1-5 of 20</p></nav>
+</main>
+<p class="nomore" id="outside" hidden>没有更多评论了</p>
+<script>
+const q = new URLSearchParams(location.search);
+const p = Math.max(1, parseInt(q.get('p') || '1', 10));
+const PAGES = 4, PER = 5, TOTAL = PAGES * PER;
+const INNER = q.get('inner') !== '0';            // 默认：那句话在**容器内**
+const SLOW = q.get('slow') !== '0';              // 默认：慢加载档（第 2 页起空壳）
+const results = document.getElementById('results');
+const next = document.getElementById('next');
+const outside = document.getElementById('outside');
+const lo = (p - 1) * PER + 1, hi = p * PER;
+
+const cmt = '<li class="cmtbox"><div class="cmtfoot">没有更多评论了</div></li>';
+const rows = (from) => {
+  let h = '';
+  for (let i = from; i < from + PER; i++) {
+    h += '<li class="card"><a class="title" href="?item=' + i + '">第 ' + i + ' 条记录</a>'
+       + '<span class="meta">标签' + i + '</span></li>';
+  }
+  return h;
+};
+const paint = (withRows) => {
+  results.innerHTML = (INNER ? cmt : '') + (withRows ? rows((p - 1) * PER) : '');
+  if (!INNER) outside.hidden = false; else outside.hidden = true;
+};
+
+if (!SLOW) {
+  paint(true);                                    // 隔离档：单页、直接就绪
+  next.setAttribute('aria-disabled', 'true');     // 分页器禁用 → 走 advance=null 那条路
+} else if (p === 1) {
+  paint(true);                                    // 第 1 页就绪
+} else {
+  paint(false);                                   // 第 2 页起：先空壳
+  next.setAttribute('aria-disabled', 'true');     // 加载中，站点**临时**禁用分页器
+  setTimeout(() => {                              // 3 秒后数据到、控件恢复可用（「临时禁用」）
+    paint(true);
+    next.removeAttribute('aria-disabled');
+  }, 3000);
+}
+document.querySelector('.progress').textContent = '进度 ' + lo + '-' + hi + ' of ' + TOTAL;
+if (SLOW && p < PAGES) {
+  next.href = '?p=' + (p + 1) + '&inner=' + (INNER ? 1 : 0) + '&slow=1';
+}
+</script>
+</body>
+</html>

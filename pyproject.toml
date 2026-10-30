@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-browser"
+authors = [{ name = "Stella-Mira" }]
+version = "0.6.45"
+description = "将 HTML 页面简化为纯数据 JSON，让 AI 像人一样访问互联网（库 / CLI / REST / MCP）"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "playwright>=1.40",
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "pydantic>=2.0",
+    "mcp>=1.2",
+]
+
+[project.optional-dependencies]
+test = ["httpx>=0.27"]
+
+[project.scripts]
+ai-browser = "ai_browser.cli:main"
+ai-browser-mcp = "ai_browser.mcp_server:main"
+ai-browser-server = "ai_browser.server:main"
+ai-shell = "ai_shell.cli:main"
+ai-shell-mcp = "ai_shell.mcp_server:main"
+
+[tool.setuptools]
+packages = ["ai_browser", "ai_shell"]

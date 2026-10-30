@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>collect 对抗性边界用例</title>
+<style>body{font-family:system-ui,sans-serif;margin:0;padding:16px}.meta{color:#888;margin-left:8px}</style>
+</head>
+<body>
+<header><h1>对抗性用例</h1></header>
+<main id="main"><!-- 内容由脚本按 mode 填充 --></main>
+<script>
+// 这些用例全部来自第三方对抗性评审与判级 agent 的复现要求，每条都有实测证据：
+//   lead         容器第一个兄弟是「分组标题」，且它的签名与续行（标签行）相同
+//                -> 曾经整组错位一格、最后一条被吃掉，deviant=0/data=ok 全静默
+//   bogus        正文里一句「本主题共 2 条权威通报」+ 一个**真的能用**的 3 页分页器
+//                -> 曾经把 15 条说成 5 条、exhausted、data=ok、resume=false
+//   byline       作者链接包在 <h4> 里、标题链接在外面
+//                -> 曾经 heading 规则 5/5 稳定取到作者主页链接
+//   price        6 条记录里两条价格相同、fields 只给 price
+//                -> 曾经同页第 2 条被当重复静默丢掉（count=5、data=ok）
+//   setsizeonly  无关控件（role=tab）带 aria-setsize=1，页面上没有区间文本，但有真分页器
+//                -> 曾经把「另一处 set 的大小」当成总数，第一页就 exhausted（潜在 S）
+//   footerend    页脚一句解释「已经到底」的文案 + 没有分页器 + 滚动才加载更多
+//                -> 曾经靠页脚文案断言 exhausted(resume=false)，而内容其实还能加载（潜在 S）
+//   jitter       「下一页」是个 button：点击只改一处无关文案（轮播/时间戳抖动），内容一条没变
+//                -> 曾经把全文档 dom_delta/text_delta 当成「推进生效」→ repeat(resume=false)（潜在 S）
+const q = new URLSearchParams(location.search);
+const mode = q.get('mode') || 'lead';
+const p = Math.max(1, parseInt(q.get('p') || '1', 10));
+const PER = 5, TOTAL = 15;
+const main = document.getElementById('main');
+const host = document.createElement('div');
+host.id = 'host';
+let wantPager = true, wantTotal = false;
+
+const rowsHtml = (from, n) => {
+  let html = '';
+  for (let i = from; i < Math.min(from + n, TOTAL); i++) {
+    html += '<li class="card"><a class="title" href="?item=' + i + '">第 ' + i + ' 条记录</a>'
+          + '<span class="meta">标签' + i + '</span></li>';
+  }
+  return html;
+};
+
+if (mode === 'lead') {
+  // 分组标题的签名刻意与「标签行」相同：`div:text > span:text`（都是纯文本 div）
+  let html = '<div id="list"><div class="head"><span>精选</span></div>';
+  for (let i = 0; i < 5; i++) {
+    html += '<div class="row"><a href="?item=' + i + '">第 ' + i + ' 条</a></div>'
+          + '<div class="tags"><span>标签' + i + '</span></div>';
+  }
+  html += '</div><p class="total">1-5 of 5</p>';
+  host.innerHTML = html;
+  wantPager = false;
+} else if (mode === 'bogus') {
+  host.innerHTML = '<aside class="aggregate"><p>本主题共 2 条权威通报，已折叠展示。</p></aside>'
+                 + '<ul id="results"></ul>';
+  wantTotal = true;
+} else if (mode === 'byline') {
+  let html = '<ul id="results">';
+  for (let i = 0; i < 5; i++) {
+    html += '<li class="card"><h4 class="byline"><a href="?author=' + i + '">@作者' + i + '</a></h4>'
+          + '<a class="cls" href="?doc=' + i + '">真正的标题 ' + i + '</a>'
+          + '<span class="meta">摘要 ' + i + '</span></li>';
+  }
+  host.innerHTML = html + '</ul>';
+  wantPager = false;
+} else if (mode === 'price') {
+  const prices = ['9.99', '19.90', '19.90', '29.00', '39.00', '49.00'];
+  let html = '<ul id="results">';
+  prices.forEach((v, i) => {
+    html += '<li class="card" data-price="' + v + '"><a href="?item=' + i + '">商品' + i + '</a></li>';
+  });
+  host.innerHTML = html + '</ul>';
+  wantPager = false;
+} else if (mode === 'setsizeonly') {
+  // aria-setsize 出现在**容器之外**的无关 set 里（HTML-AAM 合法），且页面没有区间文本
+  host.innerHTML = '<div role="tablist"><div role="tab" aria-setsize="1" aria-posinset="1">全部</div></div>'
+                 + '<ul id="results"></ul>';
+} else if (mode === 'footerend') {
+  // 短页（不可滚动）+ 没有分页器 + 页脚一句解释「已经到底」的文案。
+  // 正确结论是 stalled（没证据说到了末尾，只是推不动）；错结论是 exhausted(resume=false)。
+  host.innerHTML = '<ul id="results"></ul>';
+  const f = document.createElement('footer');
+  f.textContent = '常见问题：页面为什么会出现「已经到底」这四个字？这里只是文案说明。';
+  document.body.appendChild(f);
+  wantPager = false;
+} else if (mode === 'jitter') {
+  host.innerHTML = '<p id="tick">轮播位 0</p><ul id="results"></ul>';
+  wantPager = false;                       // 「下一页」用 button 自己造
+} else if (mode === 'weakonly') {
+  // 列表区里有一句「已经到底」，但它**不在容器里、也不是容器的下一个兄弟**（在列表上方）：
+  // 弱证据只许报告，不许单独判 exhausted —— 否则标了域还是会有弱源把 15 条说成 5 条。
+  host.innerHTML = '<p class="hint">本页内容已经到底，不再更新。</p><ul id="results"></ul>';
+  wantPager = false;
+} else if (mode === 'abbA') {
+  // A B B A B B：两行以上的记录（一条 = 标题行 + 两行副信息）。
+  // 不满足严格交替 → **不合并**，而且要**响**（needs_confirm），不许静默错位。
+  let html = '<div id="list">';
+  for (let i = 0; i < 3; i++) {
+    html += '<div class="row"><a href="?item=' + i + '">第 ' + i + ' 条</a></div>'
+          + '<div class="tags"><span>标签' + i + 'a</span></div>'
+          + '<div class="more"><span>标签' + i + 'b</span></div>';
+  }
+  host.innerHTML = html + '</div>';
+  wantPager = false;
+} else if (mode === 'svgnext') {
+  // 纯图形箭头的分页器（只有 SVG、没有文本也没有 aria-label）：当前实现找不到它。
+  // 这条限制必须有夹具（不许只在「已知限制」里嘴上说说）。
+  host.innerHTML = '<ul id="results"></ul>';
+  wantPager = false;
+} else if (mode === 'pushstate') {
+  // 判级 agent 要求的**证伪夹具**：点「下一页」只 pushState 改 URL，列表**不重渲染**。
+  // 旧规则（只看 navigated）会误判 repeat(resume=false)——jitter 的镜像：
+  // jitter 是「没推进被当推进」，这里是「没推进但换了 URL 被当推进」。
+  host.innerHTML = '<ul id="results"></ul>';
+  wantPager = false;
+} else if (mode === 'emptypage' || mode === 'emptynomore') {
+  // 翻到最后一页时空列表 + 分页器禁用：
+  //   emptypage   —— 页面**没有**正向宣告 → 只许 stalled（空列表+禁用也是「加载中」的样子）
+  //   emptynomore —— 页面明说「没有更多了」→ 这才是「到底」的正证据
+  host.innerHTML = '<ul id="results"></ul>';
+  if (mode === 'emptynomore') {
+    const p0 = document.createElement('p');
+    p0.className = 'nomore';
+    p0.textContent = '没有更多了';
+    host.appendChild(p0);
+  }
+} else if (mode === 'emptyalive') {
+  // 空列表但分页器**还活着**：语义上不该判 exhausted（控件活着 = 页面没有正向宣告结束），
+  // 只许 stalled + 把 empty_group 观测与 pager 状态分开可见。
+  host.innerHTML = '<ul id="results"></ul>';
+  wantTotal = true;
+} else if (mode === 'keycollide') {
+  // 记录组每页都被重建、内容其实不同，但**去重键取粗了**（fields 只给一个所有记录都相同的字段）
+  // -> 零新键 + 整体重建 = 与「站点循环」不可区分，必须把这个二义性暴露出来。
+  host.innerHTML = '<ul id="results"></ul>';
+  wantTotal = true;
+} else if (mode === 'asyncfill') {
+  // 「先渲染空壳 + 分页器临时 disabled（加载中别点），2.5s 后数据才到」——异步列表的常见形态。
+  // 单次观测（wait_ms 短）会把它当成「空组 + 控件禁用 = 到底」（第三方评审 S1，实测同一页面
+  // wait_ms=300 得 5 条、3000 得 15 条）。正确行为：加载中/只观测到一次空 → stalled。
+  host.innerHTML = '<ul id="results"></ul>';
+} else if (mode === 'tie2') {
+  // 5 个推广位 + 5 条真结果：**结构完全相同**（都是 div > a），只有类名不同、各自连续成块。
+  // 旧的按签名分族会得到 families=1 / family_sizes=[10]（最干净的数字）→ 警报器失效（S2）。
+  let html = '<div id="list">';
+  for (let i = 0; i < 5; i++) html += '<div class="ad"><a href="?ad=' + i + '">推广位 ' + i + '</a></div>';
+  for (let i = 0; i < 5; i++) html += '<div class="res"><a href="?item=' + i + '">真结果 ' + i + '</a></div>';
+  host.innerHTML = html + '</div>';
+  wantPager = false;
+} else if (mode === 'scopedate') {
+  // 列表区里一句日期区间 + 无关「共 3 个批次」：旧正则读成 hi=30/total=3，
+  // 于是 total/total_source 在说谎（M1）。正确行为：形状像区间但不自洽 → 只当弱证据。
+  host.innerHTML = '<p class="meta">报表区间 2026-09-01~2026-09-30 共 3 个批次</p>'
+                 + '<ul id="results"></ul>';
+  wantTotal = true;
+} else if (mode === 'ajcycle') {
+  // 同文档循环：点「下一页」只重渲染同样内容的列表（元素被换掉 = 新 id，但键全相同）。
+  // 这才是 `repeat/cycle` 的**真**签名（跨文档的「内容一样」按终态疑罪从无落 stalled）。
+  host.innerHTML = '<ul id="results"></ul>';
+  wantPager = false;
+} else if (mode === 'slowtwice') {
+  // 判级/评审第三轮：**每一页**都慢加载（空壳 + 分页器临时禁用 + 1s 后注入），共 5 页 25 条。
+  // 用来钉住「连续空计数必须在看见数据时归零」——否则「再确认一次」整次调用只能用一次，
+  // 第 2 页救回来、第 3 页当场放弃（同 URL 只改 wait_ms：10 条 / 25 条）。
+  host.innerHTML = '<ul id="results"></ul>';
+} else if (mode === 'decoysel') {
+  // 跨文档提示的唯一性风险（我自己在第四轮之后加的）：
+  // 第 1 页容器 = `div#host > ul.res`；第 2 页（新文档）在**更前面**放一个**同名同选择器**的诱饵
+  // `div.decoy > ul.res`，紧跟一句「没有更多了」；真容器在它后面、是空的、附近没有宣告。
+  // 若 `hint_selector = "ul.res"` 命中诱饵 → 会把诱饵旁边那句当成「页面宣告了结束」→ 假 exhausted。
+  if (p <= 1) {
+    host.innerHTML = '<ul class="res">' + rowsHtml(0, PER) + '</ul>';
+    wantPager = true;
+  } else {
+    // 第 2 页：诱饵（同选择器 ul.res + 紧邻「没有更多了」）在**前**，真容器在**后**、是空的、附近无宣告
+    host.innerHTML = '<div class="decoy"><ul class="res"></ul><p>没有更多了</p></div>'
+                   + '<ul class="res"></ul>';
+    wantPager = false;
+  }
+} else if (mode === 'pagewiderange') {
+  // 第四轮：**作用域退化成整页**时，页面级的区间计数器不许当「这份列表到底了」。
+  // 第 1 页：正常列表 + 分页器；第 2 页：结构整个换掉（容器与提示都定位不到 = 作用域退化成
+  // 整个 body），列表消失、分页器禁用，而页面别处（推荐位）写着一句「1-5 of 15」。
+  // 旧行为：body 作用域读到 range 且 hi>=tot → range_reached（强）→ 空组 + declared → 假 exhausted。
+  // 正确行为：作用域是整页 → 区间只当**弱证据**（range_prose + scope.kind=body）→ stalled。
+  if (p <= 1) {
+    host.innerHTML = '<ul id="results">' + rowsHtml(0, PER) + '</ul>';
+  } else {
+    host.innerHTML = '<p class="related">为你推荐 1-5 of 15</p>';   // 无关组件的账
+  }
+} else if (mode === 'anchororphan') {
+  // 第五轮：`from` 锚点在推进后**还活着**，但它的同族兄弟全没了 → 走的是
+  // `no_group_from_anchor`（不是 auto 那条）。这一条与 auto 必须共用**同一个**空组分诊
+  // （否则「两处实现只会修一边」的老毛病会以另一种形式回来）。
+  // 加 `&nomore=1` 时列表末尾有一句正向宣告 → 才允许 exhausted。
+  host.innerHTML = '<ul id="results">' + rowsHtml(0, PER) + '</ul>'
+                 + (q.get('nomore') ? '<p class="nomore">没有更多了</p>' : '');
+  if (q.get('nomore')) {
+    // 宣告要在**容器内部**才算「这份列表的账」（第七轮政策）：把它塞进 ul 里。
+    // ⚠️ 此时 host 还没 append 进 document，只能用 host.querySelector，不能用 getElementById
+    // （踩过：null.insertAdjacentHTML 抛 TypeError → 整个脚本后半段不执行 → 页面空白）。
+    host.querySelector('#results').insertAdjacentHTML('beforeend', '<p class="nomore">没有更多了</p>');
+    host.querySelectorAll(':scope > p.nomore').forEach(n => n.remove());
+  }
+  wantPager = false;                      // 分页器是下面那个 JS 按钮
+} else if (mode === 'keycollide_spa') {
+  // 第五轮：**同文档**重渲染（按钮，不换文档）+ 内容真的不同 + 但调用方要的字段每条都相同。
+  // 旧行为：同文档 + 组重建 + 零新键 = repeat（终态、resume=false），等于替调用方宣称
+  // 「站点在循环喂同一页」——而它其实推进了。正确行为：二义时只报 stalled + cycle_key_collision。
+  host.innerHTML = '<ul id="results"></ul>';
+  wantPager = false;                      // 用下面那个 JS 按钮推进
+} else if (mode === 'emptynomoreinner') {
+  // 第七轮：宣告在**容器自身内部**（div#list 里既有记录行、也有那句「没有更多了」）。
+  // 与 emptynomore（宣告在容器的**兄弟**里）成对：兄弟来源不足以判空组到底（它可能是别的
+  // 列表在说话，见 r6commentbare.html / r7range.html 的实测 S），容器自身来源才算数。
+  host.innerHTML = '<div id="list">' + rowsHtml(0, PER) + '<p class="nomore">没有更多了</p></div>';
+  wantPager = true;
+} else if (mode === 'leadlink') {
+
+  // 分组标题**与真记录同签名且带链接**：它会被当成第 0 条记录（A2/A3）。
+  // 要求：至少要**响**（needs_confirm），并且 lead_siblings 是可见的一等数字。
+  let html = '<ul id="list"><li class="head"><a href="?channel=hot">精选频道</a></li>';
+  for (let i = 0; i < 5; i++) {
+    html += '<li class="row"><a href="?item=' + i + '">第 ' + i + ' 条</a></li>'
+          + '<li class="tags"><span>标签' + i + '</span></li>';
+  }
+  host.innerHTML = html + '</ul>';
+  wantPager = false;
+}
+main.appendChild(host);
+
+// —— 列表内容 ——
+const list = document.getElementById('results');
+if (list) {
+  if (mode === 'bogus' || mode === 'setsizeonly') {
+    list.innerHTML = rowsHtml((p - 1) * PER, PER);
+  } else if (mode === 'footerend') {
+    list.innerHTML = rowsHtml(0, PER);     // 就 5 条，页面短到不可滚动：只能靠证据判「到底」
+  } else if (mode === 'jitter') {
+    list.innerHTML = rowsHtml(0, PER);     // 永远只有这 5 条
+  } else if (mode === 'weakonly' || mode === 'svgnext') {
+    list.innerHTML = rowsHtml(0, PER);
+  } else if (mode === 'pushstate') {
+    list.innerHTML = rowsHtml(0, PER);     // 永远只有这 5 条：pushState 不改内容
+  } else if (mode === 'emptypage' || mode === 'emptynomore') {
+    list.innerHTML = (p <= 1) ? rowsHtml(0, PER) : '';   // 第 2 页起是空的
+  } else if (mode === 'emptyalive') {
+    list.innerHTML = (p <= 1) ? rowsHtml(0, PER) : '';   // 同样第 2 页空，但控件不禁用
+  } else if (mode === 'keycollide') {
+    list.innerHTML = rowsHtml((p - 1) * PER, PER);       // 每页内容真的不同
+    [...list.children].forEach(li => li.setAttribute('data-kind', '商品'));  // 但键只看得见这一项
+  } else if (mode === 'asyncfill') {
+    if (p <= 1) {
+      list.innerHTML = rowsHtml(0, PER);
+    } else {
+      list.innerHTML = '';                               // 空壳（分页器的禁用由下面的 pager 块负责）
+      setTimeout(() => {                                 // 1.2s 后数据才到（长于 300ms、短于 3s）
+        list.innerHTML = rowsHtml((p - 1) * PER, PER);
+        const nx2 = document.getElementById('next');
+        if (nx2) {
+          if (p >= 3) nx2.setAttribute('aria-disabled', 'true');
+          else nx2.removeAttribute('aria-disabled');
+          nx2.href = '?mode=asyncfill&p=' + Math.min(p + 1, 3);
+        }
+      }, 1200);
+    }
+  } else if (mode === 'slowtwice') {
+    const DELAY = parseInt(q.get('delay') || '1000', 10);
+    const T = 25;                                        // 5 页 × 5 条
+    const mk = (from) => {
+      let h = '';
+      for (let i = from; i < Math.min(from + PER, T); i++) {
+        h += '<li class="card"><a class="title" href="?item=' + i + '">第 ' + i + ' 条记录</a>'
+           + '<span class="meta">标签' + i + '</span></li>';
+      }
+      return h;
+    };
+    const fill = () => {
+      list.innerHTML = mk((p - 1) * PER);
+      const nx = document.getElementById('next');
+      if (nx) {
+        if (p >= 5) nx.setAttribute('aria-disabled', 'true'); else nx.removeAttribute('aria-disabled');
+        nx.href = '?mode=slowtwice&p=' + Math.min(p + 1, 5) + '&delay=' + DELAY;
+      }
+    };
+    if (p <= 1) { fill(); }
+    else {
+      list.innerHTML = '';                               // 空壳
+      setTimeout(fill, DELAY);                           // 每页都慢加载
+    }
+  } else if (mode === 'decoysel') {
+    // 容器是 ul.res（不是 ul#results），第 1 页的数据已在上面 host.innerHTML 里渲染
+    // （诱饵场景见 test_site/decoy.html：那一份是跨文档 + 慢加载的加强版）
+  } else if (mode === 'emptynomoreinner') {
+    // 数据已在上面渲染进 div#list（这个模式的容器不是 ul#results）
+  } else if (mode === 'scopedate') {
+    list.innerHTML = rowsHtml((p - 1) * PER, PER);
+  } else if (mode === 'ajcycle') {
+    list.innerHTML = rowsHtml(0, PER);                   // 永远同样的 5 条（同文档重渲染）
+  } else if (mode === 'keycollide_spa') {
+    list.innerHTML = rowsHtml(0, PER);
+    [...list.children].forEach(li => li.setAttribute('data-kind', '商品'));
+  }
+}
+
+// —— 推进控件 ——
+if (wantPager) {
+  const nav = document.createElement('nav');
+  nav.className = 'pager';
+  const next = document.createElement('a');
+  next.id = 'next';
+  next.href = '?mode=' + mode + '&p=' + Math.min(p + 1, 3);
+  next.textContent = '下一页';
+  if (p >= 3) next.setAttribute('aria-disabled', 'true');
+  // asyncfill：数据还没到的那些页，站点会把分页器**临时禁用**（「加载中别点」）——
+  // 这正是 S1 的形态：空壳 + 禁用被当成「到底」。这里必须在**分页器创建之后**设置。
+  if (mode === 'asyncfill' && p > 1) next.setAttribute('aria-disabled', 'true');
+  nav.appendChild(next);
+  main.appendChild(nav);
+  if (wantTotal) {
+    const tot = document.createElement('p');
+    tot.className = 'total';
+    tot.textContent = ((p - 1) * PER + 1) + '-' + Math.min(p * PER, TOTAL) + ' of ' + TOTAL;
+    main.appendChild(tot);
+  }
+}
+if (mode === 'slowtwice') {
+  // 每一页加载期间都把分页器禁用（这正是 S1/S3 的形态）；只有第 1 页是可点的
+  const nx = document.getElementById('next');
+  nx.href = '?mode=slowtwice&p=' + Math.min(p + 1, 5) + '&delay=' + (q.get('delay') || '1000');
+  if (p > 1) nx.setAttribute('aria-disabled', 'true');
+}
+if (mode === 'anchororphan') {
+  // 点一次「下一页」：只留下**第一行**（锚点仍在），其余兄弟全删 → 锚点组解散
+  const btn = document.createElement('button');
+  btn.id = 'next';
+  btn.textContent = '下一页';
+  btn.addEventListener('click', () => {
+    const ul = document.getElementById('results');
+    // 只删**记录行**：容器里那句「没有更多了」（如果有）要留着——它才是「这份列表到底」的证据
+    [...ul.children].filter(el => el.tagName === 'LI').slice(1).forEach(li => li.remove());
+    btn.setAttribute('aria-disabled', 'true');           // 站点在「没有下一页」时禁用控件
+  });
+  main.appendChild(btn);
+}
+if (mode === 'keycollide_spa') {
+  // 同文档推进：第 2 页真的换成了 5 条新记录（新元素 id），但 data-kind 还是「商品」
+  const btn = document.createElement('button');
+  btn.id = 'next';
+  btn.textContent = '下一页';
+  let pg = 1;
+  btn.addEventListener('click', () => {
+    pg += 1;
+    list.innerHTML = rowsHtml((pg - 1) * PER, PER);
+    [...list.children].forEach(li => li.setAttribute('data-kind', '商品'));
+    if (pg >= 2) btn.setAttribute('aria-disabled', 'true');
+  });
+  main.appendChild(btn);
+}
+if (mode === 'emptynomoreinner') {
+  // 第 2 页起：列表空了，但宣告**留在容器里**（这是「到底」的正证据），分页器同时禁用
+  const box = document.getElementById('list');
+  if (p > 1) box.innerHTML = '<p class="nomore">没有更多了</p>';
+  const nx = document.getElementById('next');
+  nx.href = '?mode=emptynomoreinner&p=' + Math.min(p + 1, 2);
+  if (p >= 2) nx.setAttribute('aria-disabled', 'true');
+}
+if (mode === 'pagewiderange') {
+  // 第 2 页：列表没了、分页器禁用（第 1 页正常可点）
+  const nx = document.getElementById('next');
+  nx.href = '?mode=pagewiderange&p=' + Math.min(p + 1, 3);
+  if (p >= 2) nx.setAttribute('aria-disabled', 'true'); else nx.removeAttribute('aria-disabled');
+}
+if (mode === 'emptypage' || mode === 'emptynomore') {
+  // 第 2 页是空的、分页器同时禁用；emptynomore 额外有一句「没有更多了」当正证据
+  const nx = document.getElementById('next');
+  nx.href = '?mode=' + mode + '&p=' + Math.min(p + 1, 2);
+  if (p >= 2) nx.setAttribute('aria-disabled', 'true'); else nx.removeAttribute('aria-disabled');
+}
+if (mode === 'ajcycle') {
+  // 同文档循环：点「下一页」重渲染同样的 5 条（元素换新 id、键全相同）
+  const btn = document.createElement('button');
+  btn.id = 'next';
+  btn.textContent = '下一页';
+  btn.addEventListener('click', () => {
+    document.getElementById('results').innerHTML = rowsHtml(0, PER);
+  });
+  main.appendChild(btn);
+}
+if (mode === 'pushstate') {
+  // 点「下一页」只改 URL、不重渲染列表（navigated 会有、appeared 不会有）
+  const btn = document.createElement('button');
+  btn.id = 'next';
+  btn.textContent = '下一页';
+  let n = 1;
+  btn.addEventListener('click', () => {
+    n += 1;
+    history.pushState({}, '', '?mode=pushstate&p=' + n);
+  });
+  main.appendChild(btn);
+}
+if (mode === 'svgnext') {
+  // 只有图形、没有文本的「下一页」：当前实现识别不到（这是**被夹具钉住的已知限制**）
+  const btn = document.createElement('button');
+  btn.id = 'next';
+  btn.setAttribute('aria-label', '');
+  btn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>';
+  main.appendChild(btn);
+}
+if (mode === 'jitter') {
+  // 点击只让一处无关文案变长（模拟轮播/时间戳抖动），列表一条都不变
+  const btn = document.createElement('button');
+  btn.id = 'next';
+  btn.textContent = '下一页';
+  let tick = 0;
+  btn.addEventListener('click', () => {
+    tick += 1;
+    document.getElementById('tick').textContent =
+      '轮播位 ' + tick + ' 已经刷新了很多次但列表内容一条都没变' + '。'.repeat(tick);
+  });
+  main.appendChild(btn);
+}
+</script>
+</body>
+</html>

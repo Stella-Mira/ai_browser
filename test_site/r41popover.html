@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>弹层列表（自定义 select / Radix 风格 popper）</title>
+<style>
+  body { font: 14px/1.6 sans-serif; margin: 24px; }
+  #trigger { padding: 6px 10px; }
+  [role="option"] { padding: 2px 6px; cursor: pointer; }
+  [role="option"][aria-selected="true"] { background: #eef; }
+</style>
+</head>
+<body>
+<!-- r41：复现「自定义下拉（div + role=listbox/option，挂在 body 端口的 popper 里）」的提取问题。
+     出处：test-node 节点 test-agent 针对 r195 的 GUI 实测 #1（Radix Select 面板展开后，
+     16 个模型叶子在 DOM 里，而提取结果 0 个 option 块、8 项进 coverage.dropped.invisible）。
+     三种模式（用查询串切换，便于"一根线一根线地量"）：
+       ?open=1        面板**挂载且可见**（真实展开态）
+       ?open=0（缺省）面板**不挂载**（Radix 的真实行为：关闭时 DOM 里根本没有面板）
+       ?virt=1        面板只渲染前 12 行（40 项里），模拟虚拟列表
+-->
+<h1>模型选择</h1>
+<p>当前模型：<b id="cur">Kimi K3</b>（下方按钮是弹层触发器）</p>
+<button id="trigger" role="combobox" aria-expanded="false" aria-haspopup="listbox" aria-controls="panel">Kimi K3</button>
+<p id="state">未展开</p>
+<div id="portal"></div>
+<script>
+  const q = new URLSearchParams(location.search);
+  const OPEN = q.get('open') === '1';
+  const VIRT = q.get('virt') === '1';
+  const MODELS = ['Kimi K3', 'Kimi K2', 'Kimi K1.5', 'Kimi 8K', 'Kimi 32K', 'Kimi 128K',
+                  'Moonshot V1 8K', 'Moonshot V1 32K', 'Moonshot V1 128K',
+                  'DeepSeek V3', 'DeepSeek R1', 'DeepSeek V4 Pro', 'DeepSeek Coder',
+                  'GPT-4o', 'Claude Sonnet', 'Gemini Pro'];
+  function renderPanel() {
+    if (!OPEN) return;                       // 关闭 ⇒ 不挂载（与 Radix 一致：DOM 里没有面板）
+    const wrap = document.createElement('div');   // popper 端口层
+    wrap.setAttribute('data-radix-popper-content-wrapper', '');
+    wrap.style.cssText = 'position:fixed;left:60px;top:140px;z-index:50';
+    const lb = document.createElement('div');
+    lb.id = 'panel';
+    lb.setAttribute('role', 'listbox');
+    lb.setAttribute('aria-label', '模型');
+    lb.style.cssText = 'background:#fff;border:1px solid #ccc;padding:4px;min-width:200px;'
+                     + (VIRT ? 'max-height:96px;overflow:auto;' : '');
+    const items = VIRT ? MODELS.slice(0, 12) : MODELS;   // 虚表：只渲染可视行
+    items.forEach(function (m, i) {
+      const o = document.createElement('div');
+      o.setAttribute('role', 'option');
+      o.id = 'opt-' + i;
+      if (m === 'Kimi K3') o.setAttribute('aria-selected', 'true');
+      else o.setAttribute('aria-selected', 'false');
+      // 虚拟列表的标准声明：整表 16 项、当前只渲染了这 12 行。
+      // ⇒ 提取器已有 `coverage.unrendered`（只信页面自己声明的 aria-setsize，不许猜）应能报出 16，
+      //   否则消费端会把"只渲染了 12 行"读成"一共就 12 个模型"。
+      if (VIRT) o.setAttribute('aria-setsize', String(MODELS.length));
+      o.textContent = m;
+      o.addEventListener('click', function () {
+        document.getElementById('cur').textContent = m;
+        document.getElementById('trigger').textContent = m;
+        document.getElementById('state').textContent = '已选 ' + m;
+      });
+      lb.appendChild(o);
+    });
+    wrap.appendChild(lb);
+    document.getElementById('portal').appendChild(wrap);
+  }
+  document.getElementById('trigger').addEventListener('click', function () {
+    document.getElementById('state').textContent = '已展开';
+    if (!document.querySelector('[role="listbox"]')) renderPanel();
+  });
+  renderPanel();
+</script>
+</body>
+</html>
